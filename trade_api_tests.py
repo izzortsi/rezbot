@@ -1,3 +1,6 @@
+
+# %%
+
 import unicorn_binance_rest_api as ubr
 import unicorn_binance_websocket_api as ubw
 import unicorn_binance_rest_api.unicorn_binance_rest_api_enums as enums
@@ -5,6 +8,7 @@ from unicorn_binance_rest_api.unicorn_binance_rest_api_exceptions import *
 import os
 import threading
 import time
+
 
 # %%
 
@@ -20,22 +24,35 @@ bwsm = ubw.BinanceWebSocketApiManager(
 
 # %%
 
+def f_tp_price(price, tp, lev, side="BUY", with_fee = True):
+    if with_fee:
+        if side == "BUY":
+                return f"{(price * ((1+(tp/lev) + 0.04)/100)):.2f}"
+        elif side == "SELL":
+                return f"{(price * ((1-(tp/lev)-0.04)/100)):.2f}"
+    else:
+        if side == "BUY":
+                return f"{(price * (1+(tp/lev)/100)):.2f}"
+        elif side == "SELL":
+                return f"{(price * (1-(tp/lev)/100)):.2f}"
 
-def f_tp_price(price, tp, lev, side="BUY"):
-    if side == "BUY":
-        return f"{(price * (1+(tp/lev)/100)):.2f}"
-    elif side == "SELL":
-        return f"{(price * (1-(tp/lev)/100)):.2f}"
 
+def f_sl_price(price, sl, lev, side="BUY", with_fee=True):
+    if with_fee:
+        if side == "BUY":
+            return f"{(price * ((1+(sl/lev)+0.04)/100)):.2f}"
+        elif side == "SELL":
+            return f"{(price * ((1-(sl/lev)-0.04)/100)):.2f}"
 
-def f_sl_price(price, sl, lev, side="BUY"):
-    if side == "BUY":
-        return f"{(price * (1+(sl/lev)/100)):.2f}"
-    elif side == "SELL":
-        return f"{(price * (1-(sl/lev)/100)):.2f}"
+    else:
+        if side == "BUY":
+            return f"{(price * (1+(sl/lev)/100)):.2f}"
+        elif side == "SELL":
+            return f"{(price * (1-(sl/lev)/100)):.2f}"
 
 
 # %%
+
 symbol = "bnbusdt"
 lev = 60
 
@@ -53,16 +70,15 @@ elif symbol == "ethusdt":
     qty = 0.001
 
 # %%
+ticker = brm.get_symbol_ticker(symbol=symbol.upper())
+price = float(ticker["price"])
 
 tp_price = f_tp_price(price, tp, lev)
 sl_price = f_sl_price(price, sl, lev)
-tp_price
-sl_price
-ticker = brm.get_symbol_ticker(symbol=symbol.upper())
-price = float(ticker["price"])
-price
-
-# price = 500.55
+print(f"""tp_price: {tp_price}
+price: {price}
+sl_price: {sl_price}
+""")
 # %%
 100 * (float(sl_price) - price) / price
 # %%
