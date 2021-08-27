@@ -1,6 +1,3 @@
-
-# %%
-
 import unicorn_binance_rest_api as ubr
 import unicorn_binance_websocket_api as ubw
 import unicorn_binance_rest_api.unicorn_binance_rest_api_enums as enums
@@ -8,7 +5,6 @@ from unicorn_binance_rest_api.unicorn_binance_rest_api_exceptions import *
 import os
 import threading
 import time
-
 
 # %%
 
@@ -21,53 +17,43 @@ bwsm = ubw.BinanceWebSocketApiManager(
     output_default="UnicornFy", exchange="binance.com-futures"
 )
 
-
 # %%
-
-def f_tp_price(price, tp, lev, side="BUY", with_fee = True):
-    if with_fee:
-        if side == "BUY":
-                return f"{(price * ((1+(tp/lev) + 0.04)/100)):.2f}"
-        elif side == "SELL":
-                return f"{(price * ((1-(tp/lev)-0.04)/100)):.2f}"
-    else:
-        if side == "BUY":
-                return f"{(price * (1+(tp/lev)/100)):.2f}"
-        elif side == "SELL":
-                return f"{(price * (1-(tp/lev)/100)):.2f}"
-
-
-def f_sl_price(price, sl, lev, side="BUY", with_fee=True):
-    if with_fee:
-        if side == "BUY":
-            return f"{(price * ((1+(sl/lev)+0.04)/100)):.2f}"
-        elif side == "SELL":
-            return f"{(price * ((1-(sl/lev)-0.04)/100)):.2f}"
-
-    else:
-        if side == "BUY":
-            return f"{(price * (1+(sl/lev)/100)):.2f}"
-        elif side == "SELL":
-            return f"{(price * (1-(sl/lev)/100)):.2f}"
-
-
-# %%
-
 symbol = "bnbusdt"
-lev = 60
-
-# %%
-
-sl = -3
-sl / lev
-tp = 10
-tp / lev
-
-# %%
 if symbol == "bnbusdt":
     qty = 0.01
 elif symbol == "ethusdt":
     qty = 0.001
+
+# %%
+
+
+def f_tp_price(price, tp, lev, side="BUY"):
+    if side == "BUY":
+        return f"{(price * (1+(tp/lev)/100)):.2f}"
+    elif side == "SELL":
+        return f"{(price * (1-(tp/lev)/100)):.2f}"
+
+
+def f_sl_price(price, sl, lev, side="BUY"):
+    if side == "BUY":
+        return f"{(price * (1+(sl/lev)/100)):.2f}"
+    elif side == "SELL":
+        return f"{(price * (1-(sl/lev)/100)):.2f}"
+
+
+# %%
+
+lev = 75
+
+# %%
+
+sl = -5
+sl / lev
+tp = 15
+tp / lev
+
+# %%
+
 
 # %%
 ticker = brm.get_symbol_ticker(symbol=symbol.upper())
@@ -75,28 +61,9 @@ price = float(ticker["price"])
 
 tp_price = f_tp_price(price, tp, lev)
 sl_price = f_sl_price(price, sl, lev)
-print(f"""tp_price: {tp_price}
-price: {price}
-sl_price: {sl_price}
-""")
-# %%
-100 * (float(sl_price) - price) / price
-# %%
-"""
-isso aqui é o seguinte: se o min notional é 5usd,
-tem q valer q qty * price >= 5usd.
-
-"""
-calc_notional = lambda lev, market_value: market_value / lev
-
-# %%
-notional = calc_notional(lev, price)
-notional
-
-# %%
-(qty * price)
-qty * price
-# %%
+tp_price
+sl_price
+# price
 
 brm.futures_change_leverage(symbol=symbol, leverage=lev)
 # %%
@@ -186,10 +153,50 @@ def send_order(tp, sl, side="BUY", protect=False):
 
 
 # %%
-qty *= 2
-send_order(tp, sl, side=S, protect=False)
+qty*=2
 # %%
 
+send_order(tp, sl, side=B, protect=False)
+# %%
+position = brm.futures_position_information(symbol=symbol)
+price = float(position[0]["entryPrice"])
+tp_price = f_tp_price(price, tp, lev, side=B)
+sl_price = f_sl_price(price, sl, lev, side=B)
+print(
+        f"""price: {price}
+        tp_price: {tp_price}
+        sl_price: {sl_price}"""
+)
+
+# %%
+new_position = brm.futures_create_order(
+    symbol=symbol,
+    side=B,
+    type="MARKET",
+    quantity=qty,
+    priceProtect=False,
+    workingType="CONTRACT_PRICE",
+    newOrderRespType="RESULT",
+)
+
+# %%
+new_position
+# %%
+
+close_order = brm.futures_create_order(
+            symbol=symbol,
+            side=S,
+            type="MARKET",
+            workingType="CONTRACT_PRICE",
+            quantity=qty,
+            reduceOnly=True,
+            priceProtect=False,
+            newOrderRespType="RESULT",
+)
+
+
+# %%
+close_order
 # %%
 tp_order2 = brm.futures_create_order(
     symbol="ETHUSDT",
@@ -205,14 +212,7 @@ tp_order2 = brm.futures_create_order(
 
 # %%
 
-new_position = brm.futures_create_order(
-    symbol=symbol,
-    side=S,
-    type="MARKET",
-    quantity=qty,
-    priceProtect=False,
-    workingType="CONTRACT_PRICE",
-)
+
 
 
 # %%
@@ -288,3 +288,39 @@ worker_thread.is_alive()
 ubwa_com_im.create_stream(
     "arr", "!userData", symbols="trxbtc", api_key=api_key, api_secret=api_secret
 )
+
+
+
+# %%
+
+import pandas as pd
+import pandas_ta as ta
+import numpy.random as npr
+
+# %%
+
+randarr = npr.randn(50)
+df = pd.DataFrame(data=randarr, columns=["series"])
+
+
+# %%
+series = df.series.tail(26)
+
+
+# %%
+minmax = lambda series: (series - series.min())/(series.max() - series.min())
+
+
+from backtest.hist_grabber import HistoricalMACDGrabber
+
+mgrab = HistoricalMACDGrabber(brm)
+
+
+# %%
+mgrab.get_data(symbol="BNBUSDT", tframe="15m", fromdate="1 day ago")
+df = mgrab.compute_indicators()
+normalized_hist = minmax(df.histogram)
+normalized_hist.tail(30).describe()["25%"]
+norm_tail = normalized_hist.tail(30)
+description = norm_tail.describe()
+description['mean'] - description['25%']

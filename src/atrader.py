@@ -6,15 +6,6 @@ from unicorn_binance_rest_api.unicorn_binance_rest_api_exceptions import *
 class ATrader:
     def __init__(self, manager, strategy, symbol, leverage, is_real, qty):
 
-        if symbol == "ethusdt" or symbol == "ETHUSDT":
-            self.qty = "0.001"
-        elif symbol == "bnbusdt" or symbol == "BNBUSDT":
-            self.qty = "0.01"
-        else:
-            raise Exception(
-                "as of now the only allowed symbols are 'ethusdt' and 'bnbusdt'"
-            )
-
         self.manager = manager
         self.bwsm = manager.bwsm
         self.client = manager.client
@@ -23,10 +14,30 @@ class ATrader:
         self.leverage = leverage
         self.is_real = is_real
 
-        if self.is_real:
-            self.client.futures_change_leverage(
-                symbol=self.symbol, leverage=self.leverage
+        if self.symbol == "ethusdt" or self.symbol == "ETHUSDT":
+            min = 0.001
+            ticker = self.client.get_symbol_ticker(symbol=self.symbol.upper())
+            price = float(ticker["price"])
+            multiplier = np.ceil(5 / (price * min))
+            self.qty = f"{(multiplier*min):.3f}"
+        elif self.symbol == "bnbusdt" or self.symbol == "BNBUSDT":
+            min = 0.01
+            ticker = self.client.get_symbol_ticker(symbol=self.symbol.upper())
+            price = float(ticker["price"])
+            multiplier = np.ceil(5 / (price * min))
+            self.qty = f"{(multiplier*min):.2f}"
+        elif self.symbol == "btcusdt" or self.symbol == "BTCUSDT":
+            min = 0.001
+            ticker = self.client.get_symbol_ticker(symbol=self.symbol.upper())
+            price = float(ticker["price"])
+            multiplier = np.ceil(5 / (price * min))
+            self.qty = f"{(multiplier*min):.3f}"
+        else:
+            raise Exception(
+                "as of now the only allowed symbols are 'ethusdt' and 'bnbusdt'"
             )
+
+        self.client.futures_change_leverage(symbol=self.symbol, leverage=self.leverage)
 
         self.name = name_trader(strategy, self.symbol)
         # self.profits = []
@@ -56,10 +67,11 @@ class ATrader:
         self.position = None
         self.entry_price = None
         self.entry_time = None
+        self.exit_price = None
+        self.exit_time = None
         self.last_price = None
         self.now_time = None
-        self.tp_order = None
-        self.sl_order = None
+        self.close_order = None
         # self.uptime = None
 
         strf_init_time = strf_epoch(self.init_time, fmt="%H-%M-%S")
@@ -110,6 +122,32 @@ class ATrader:
                     self.csv_log_path_candles, header=False, mode="a", index=False
                 )
 
+    def _drop_trades_to_csv(self):
+        updated_num_trades = len(self.confirmatory_data)
+        # print(updated_num_trades)
+        if updated_num_trades == 1:
+            row = pd.DataFrame.from_dict(self.confirmatory_data)
+            # print(row)
+            row.to_csv(
+                self.csv_log_path,
+                header=True,
+                mode="w",
+                index=False,
+            )
+            self.num_trades += 1
+
+        elif (updated_num_trades > 1) and (updated_num_trades > self.num_trades):
+            # print(int(self.now - self.start_time))
+            row = pd.DataFrame.from_dict([self.confirmatory_data[-1]])
+            # print(row)
+            row.to_csv(
+                self.csv_log_path,
+                header=False,
+                mode="a",
+                index=False,
+            )
+            self.num_trades += 1
+
     def _change_position(self):
         self.is_positioned = not self.is_positioned
         # time.sleep(0.1)
@@ -158,7 +196,7 @@ class ATrader:
     def _process_stream_data(self):
 
         while self.keep_running:
-            time.sleep(0.1)
+            time.sleep(0.2)
             if self.bwsm.is_manager_stopping():
                 exit(0)
 
@@ -175,32 +213,29 @@ class ATrader:
 
                         kline = data_from_stream_buffer["kline"]
 
-                        self.now = time.time()
-                        kline_time = to_datetime_tz(self.now)
-
                         o = float(kline["open_price"])
                         h = float(kline["high_price"])
                         l = float(kline["low_price"])
                         c = float(kline["close_price"])
-                        v = float(kline["base_volume"])
-
-                        num_trades = int(kline["number_of_trades"])
-                        is_closed = bool(kline["is_closed"])
+                        # v = float(kline["base_volume"])
+                        #
+                        # num_trades = int(kline["number_of_trades"])
+                        # is_closed = bool(kline["is_closed"])
 
                         last_index = self.data_window.index[-1]
 
+                        self.now = time.time()
+                        self.now_time = to_datetime_tz(self.now)
                         self.last_price = c
-                        self.now_time = kline_time
 
                         dohlcv = pd.DataFrame(
-                            np.atleast_2d(np.array([kline_time, o, h, l, c, v])),
+                            np.atleast_2d(np.array([self.now_time, o, h, l, c])),
                             columns=[
                                 "date",
                                 "open",
                                 "high",
                                 "low",
                                 "close",
-                                "volume",
                             ],
                             index=[last_index],
                         )
@@ -217,7 +252,6 @@ class ATrader:
                         )
 
                         date = dohlcv.date
-
                         new_row = pd.concat(
                             [date, macd.tail(1)],
                             axis=1,
@@ -234,55 +268,15 @@ class ATrader:
                             )
 
                             self.running_candles.append(dohlcv)
-
                             self.init_time = time.time()
-
                         else:
                             self.data_window.update(new_row)
 
-                            # self.data = self.data_window.tail(
-                            #     self.strategy.macd_params["signal"]
-                            # )
+                        self._act_on_signal()
+                        self._drop_trades_to_csv()
 
-                            # self.running_candles.append(dohlcv)
-
-                        # self.uptime = to_datetime_tz(self.now) - to_datetime_tz(
-                        # self.start_time
-                        # )
-                        if self.is_real:
-                            self._really_act_on_signal()
-                        else:
-                            self._act_on_signal()
-
-                        updated_num_trades = len(self.confirmatory_data)
-                        # print(updated_num_trades)
-                        if updated_num_trades == 1:
-                            row = pd.DataFrame.from_dict(self.confirmatory_data)
-                            # print(row)
-                            row.to_csv(
-                                self.csv_log_path,
-                                header=True,
-                                mode="w",
-                                index=False,
-                            )
-                            self.num_trades += 1
-
-                        elif (updated_num_trades > 1) and (
-                            updated_num_trades > self.num_trades
-                        ):
-                            # print(int(self.now - self.start_time))
-                            row = pd.DataFrame.from_dict([self.confirmatory_data[-1]])
-                            # print(row)
-                            row.to_csv(
-                                self.csv_log_path,
-                                header=False,
-                                mode="a",
-                                index=False,
-                            )
-                            self.num_trades += 1
-
-                except:
-                    self.logger.info("something wrong at line 281")
+                except Exception as e:
+                    self.logger.info(f"{e}")
 
     def _act_on_signal(self):
         """
@@ -291,251 +285,88 @@ class ATrader:
         2) essa é a função que faz os trades, efetivamente. falta isso
         """
 
-        if self.is_positioned:
-
-            if self.strategy.stoploss_check(self, self.data_window, self.entry_price):
-                # print("sl")
-                exit_price = self.data_window.close.values[-1]
-                exit_time = self.data_window.date.values[-1]
-
-                profit = (exit_price - self.entry_price) * self.leverage - 0.0002 * (
-                    self.entry_price + exit_price
-                )
-                percentual_profit = (profit / self.entry_price) * 100
-
-                self.cum_profit += percentual_profit
-                self.confirmatory_data.append(
-                    {
-                        "type": "sl",
-                        "entry_time": self.entry_time,
-                        "entry_price": self.entry_price,
-                        "exit_time": exit_time,
-                        "exit_price": exit_price,
-                        "percentual_difference": percentual_profit,
-                        "cumulative_profit": self.cum_profit,
-                    }
-                )
-
-                self.logger.info(
-                    f"STOPLOSS: Δabs: {profit}; Δ%: {percentual_profit}%; cumulative profit: {self.cum_profit}%"
-                )
-
-                self._change_position()
-                self.entry_price = None
-
-            elif self.strategy.exit_signal(self, self.data_window, self.entry_price):
-                # print("tp")
-                exit_price = self.data_window.close.values[-1]
-                exit_time = self.data_window.date.values[-1]
-
-                profit = (exit_price - self.entry_price) * self.leverage - 0.0002 * (
-                    self.entry_price + exit_price
-                )
-                percentual_profit = (profit / self.entry_price) * 100
-
-                self.cum_profit += percentual_profit
-                self.confirmatory_data.append(
-                    {
-                        "type": "tp",
-                        "entry_time": self.entry_time,
-                        "entry_price": self.entry_price,
-                        "exit_time": exit_time,
-                        "exit_price": exit_price,
-                        "percentual_difference": percentual_profit,
-                        "cumulative_profit": self.cum_profit,
-                    }
-                )
-
-                self.logger.info(
-                    f"PROFIT: Δabs: {profit}; Δ%: {percentual_profit}%; cumulative profit: {self.cum_profit}%"
-                )
-
-                self._change_position()
-                self.entry_price = None
-
-        else:
+        if not self.is_positioned:
             if self.strategy.entry_signal(self, self.data_window):
-                self.entry_price = self.data_window.close.values[-1]
-                self.entry_time = self.data_window.date.values[-1]
-                self.logger.info(f"ENTRY: E:{self.entry_price} at t:{self.entry_time}")
+                try:
+                    self._start_position()
+                    self.logger.info(
+                        f"ENTRY: E:{self.entry_price} at t:{self.entry_time}"
+                    )
+                    self._change_position()
+                except BinanceAPIException as error:
+                    # print(type(error))
+                    self.logger.info(f"positioning,  {error}")
+        else:
+            if self.strategy.exit_signal(self, self.data_window, self.entry_price):
+                try:
+                    self._close_position()
+                    self._register_trade_data("TP")
+                    self._change_position()
+                except BinanceAPIException as error:
+                    self.logger.info(f"tp order, {error}")
+            elif self.strategy.stoploss_check(self, self.data_window, self.entry_price):
+                try:
+                    self._close_position()
+                    self._register_trade_data("SL")
+                    self._change_position()
+                except BinanceAPIException as error:
+                    self.logger.info(f"sl order, {error}")
 
-                self._change_position()
-
-    def _send_order(self):
+    def _start_position(self):
         """lembrar de settar/formatar quantity etc pro caso geral, com qualquer
         coin"""
-        try:
 
-            new_position = self.client.futures_create_order(
-                symbol=self.symbol,
-                side="BUY",
-                type="MARKET",
-                quantity=self.qty,
-                priceProtect=False,
-                workingType="MARK_PRICE",
-            )
+        self.position = self.client.futures_create_order(
+            symbol=self.symbol,
+            side="BUY",
+            type="MARKET",
+            quantity=self.qty,
+            priceProtect=False,
+            workingType="MARK_PRICE",
+            newOrderRespType="RESULT",
+        )
+        if self.position["status"] == "FILLED":
+            self.entry_price = float(self.position["avgPrice"])
+            self.qty = self.position["executedQty"]
+            self.entry_time = to_datetime_tz(self.position["updateTime"], unit="ms")
 
-            self.position = self.client.futures_position_information(symbol=self.symbol)
-            self.entry_price = float(self.position[0]["entryPrice"])
-            self.qty = self.position[0]["positionAmt"]
-            self.tp_price = f_tp_price(
-                self.entry_price, self.take_profit, self.leverage
-            )
-            self.sl_price = f_sl_price(self.entry_price, self.stoploss, self.leverage)
-            self.entry_time = to_datetime_tz(new_position["updateTime"], unit="ms")
-            self._change_position()
-            self.logger.info(f"ENTRY: E:{self.entry_price} at t:{self.entry_time}")
-        except BinanceAPIException as error:
-            # print(type(error))
-            self.logger.info(f"positioning,  {error}")
-            return False
+    def _close_position(self):
+        self.close_order = self.client.futures_create_order(
+            symbol=self.symbol,
+            side="SELL",
+            type="MARKET",
+            workingType="MARK_PRICE",
+            quantity=self.qty,
+            reduceOnly=True,
+            priceProtect=False,
+            newOrderRespType="RESULT",
+        )
+        if self.close_order["status"] == "FILLED":
+            self.exit_price = float(self.close_order["avgPrice"])
+            self.exit_time = to_datetime_tz(self.close_order["updateTime"], unit="ms")
 
-        else:
-            try:
-                self.sl_order = self.client.futures_create_order(
-                    symbol=self.symbol,
-                    side="SELL",
-                    type="STOP_MARKET",
-                    stopPrice=self.sl_price,
-                    workingType="MARK_PRICE",
-                    quantity=self.qty,
-                    reduceOnly=True,
-                    priceProtect=False,
-                    timeInForce="GTE_GTC",
-                )
-            except BinanceAPIException as error:
-                if error.code == -2021:
-                    # print(type(error))
-                    self.logger.info(f"sl order, {error}")
-                    try:
-                        self.sl_order = self.client.futures_create_order(
-                            symbol=self.symbol,
-                            side="SELL",
-                            type="MARKET",
-                            workingType="MARK_PRICE",
-                            quantity=self.qty,
-                            priceProtect=False,
-                        )
-                    except BinanceAPIError as error:
-                        # print(type(error))
-                        self.logger.info(f"MALINGO: SL ORDER 2, {error}")
-            else:
-                try:
-                    self.tp_order = self.client.futures_create_order(
-                        symbol=self.symbol,
-                        side="SELL",
-                        type="TAKE_PROFIT_MARKET",
-                        stopPrice=self.tp_price,
-                        workingType="MARK_PRICE",
-                        quantity=self.qty,
-                        reduceOnly=True,
-                        priceProtect=False,
-                        timeInForce="GTE_GTC",
-                    )
-                except BinanceAPIException as error:
-                    # if error.code != -4129:
-                    # print(type(error))
-                    self.logger.info(f"tp order, {error}")
+    def _register_trade_data(self, tp_or_sl):
+        profit = (self.exit_price - self.entry_price) - 0.0002 * (
+            self.entry_price + self.exit_price
+        )
+        percentual_profit = (profit / self.entry_price) * 100 * self.leverage
 
-        return True
+        self.cum_profit += percentual_profit
+        self.confirmatory_data.append(
+            {
+                "type": f"{tp_or_sl}",
+                "entry_time": self.entry_time,
+                "entry_price": self.entry_price,
+                "exit_time": self.exit_time,
+                "exit_price": self.exit_price,
+                "percentual_difference": percentual_profit,
+                "cumulative_profit": self.cum_profit,
+            }
+        )
 
-    def _really_act_on_signal(self):
-        """
-        aqui eu tenho que
-        1) mudar o sinal de entrada pra incluir as duas direçoes
-        2) essa é a função que faz os trades, efetivamente. falta isso
-        """
-
-        if self.is_positioned:
-            # check the SL order for completion
-            if self.sl_order is not None:
-
-                sl_order_status = self.client.futures_get_order(
-                    symbol=self.symbol, orderId=self.sl_order["orderId"]
-                )
-
-                if sl_order_status["status"] == "FILLED":
-                    # print("sl")
-                    exit_price = float(sl_order_status["avgPrice"])
-                    exit_time = to_datetime_tz(sl_order_status["updateTime"], unit="ms")
-
-                    profit = (exit_price - self.entry_price) * self.leverage
-                    percentual_profit = (
-                        ((exit_price - self.entry_price) / self.entry_price)
-                        * 100
-                        * self.leverage
-                    )
-
-                    self.cum_profit += percentual_profit
-                    self.confirmatory_data.append(
-                        {
-                            "type": "sl",
-                            "entry_time": self.entry_time,
-                            "entry_price": self.entry_price,
-                            "exit_time": exit_time,
-                            "exit_price": exit_price,
-                            "percentual_difference": percentual_profit,
-                            "cumulative_profit": self.cum_profit,
-                        }
-                    )
-
-                    self.logger.info(
-                        f"STOPLOSS: Δabs: {profit}; Δ%: {percentual_profit}%; cumulative profit: {self.cum_profit}%"
-                    )
-
-                    self._change_position()
-                    self.sl_order = None
-                    self.entry_price = None
-
-            if self.tp_order is not None:
-                # print("tp1")
-                tp_order_status = self.client.futures_get_order(
-                    symbol=self.symbol, orderId=self.tp_order["orderId"]
-                )
-
-                if tp_order_status["status"] == "FILLED":
-                    # print("tp")
-                    exit_price = float(tp_order_status["avgPrice"])
-                    exit_time = to_datetime_tz(tp_order_status["updateTime"], unit="ms")
-
-                    profit = (exit_price - self.entry_price) * self.leverage
-                    percentual_profit = (
-                        ((exit_price - self.entry_price) / self.entry_price)
-                        * 100
-                        * self.leverage
-                    )
-
-                    self.cum_profit += percentual_profit
-                    self.confirmatory_data.append(
-                        {
-                            "type": "tp",
-                            "entry_time": self.entry_time,
-                            "entry_price": self.entry_price,
-                            "exit_time": exit_time,
-                            "exit_price": exit_price,
-                            "percentual_difference": percentual_profit,
-                            "cumulative_profit": self.cum_profit,
-                        }
-                    )
-
-                    self.logger.info(
-                        f"PROFIT: Δabs: {profit}; Δ%: {percentual_profit}%; cumulative profit: {self.cum_profit}%"
-                    )
-
-                    self._change_position()
-                    self.tp_order = None
-                    self.entry_price = None
-            # else:  # se por algum acaso as duas ordens são none mas a posição tá aberta
-            #     self._send_order()
-
-        else:
-            if self.strategy.entry_signal(self, self.data_window):
-                if self._send_order():
-                    print("order sent, supposedly")
-                else:
-                    self.logger.info(
-                        f"something went wrong while trying to enter into position"
-                    )
+        self.logger.info(
+            f"{tp_or_sl}: Δabs: {profit}; Δ%: {percentual_profit}%; cum_profit: {self.cum_profit}%"
+        )
 
     def live_plot(self):
 
