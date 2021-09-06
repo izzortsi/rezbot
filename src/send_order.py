@@ -1,4 +1,4 @@
-    def _really_act_on_signal(self):
+   def _really_act_on_signal(self):
         """
         aqui eu tenho que
         1) mudar o sinal de entrada pra incluir as duas direçoes
@@ -84,4 +84,4 @@
             except BinanceAPIException as error:
 
                 print(type(error))
-                print("sl order, ", error)            
+                print("sl order, ", error)
