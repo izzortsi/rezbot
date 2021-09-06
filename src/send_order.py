@@ -68,3 +68,20 @@
 
                 print(type(error))
                 print("tp order, ", error)
+
+            try:
+                self.sl_order = self.client.futures_create_order(
+                    symbol=self.symbol,
+                    side=counterside,
+                    type="TAKE_PROFIT_MARKET",
+                    stopPrice=tp_price,
+                    workingType="CONTRACT_PRICE",
+                    quantity=self.qty,
+                    reduceOnly=True,
+                    priceProtect=protect,
+                    timeInForce="GTE_GTC",
+                )
+            except BinanceAPIException as error:
+
+                print(type(error))
+                print("sl order, ", error)            

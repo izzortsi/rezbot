@@ -1,6 +1,8 @@
 
 # %%
 
+import pandas as pd
+import json
 from src.tradingview_handlers import ThreadedTAHandler
 import unicorn_binance_rest_api as ubr
 import unicorn_binance_websocket_api as ubw
@@ -9,8 +11,73 @@ from unicorn_binance_rest_api.unicorn_binance_rest_api_exceptions import *
 import os
 import threading
 import time
+import tradingview_ta as ta
+# %%
+
+
+class ThreadedTAHandler(threading.Thread):
+    def __init__(self, symbol, tframes, rate):
+        threading.Thread.__init__(self)
+        self.symbol = symbol
+        self.tframes = tframes
+        self.rate = rate
+        self.summary = []
+        self.signal = 0
+        self.handlers = {}
+        self.make_handlers()
+        #self.threaded_handler = self.start_threaded_handler()
+        self.keep_alive = True
+        self.daemon = True
+        self.printing = False
+        self.start()
+
+    def run(self):
+        while self.keep_alive:
+            self.check_signals()
+            if self.printing:
+                print(self.summary, self.signal)
+            time.sleep(self.rate)
+
+    def stop(self):
+        self.keep_alive = False
+
+    def make_handlers(self):
+
+        for tf in self.tframes:
+            h_tf = TA_Handler(
+                symbol=self.symbol,
+                exchange="binance",
+                screener="crypto",
+                interval=tf,
+                timeout=None,
+            )
+            self.handlers[f"h_{tf}"] = h_tf
+
+    def check_signals(self):
+
+        summary = []
+        recommendations = []
+
+        for handler_key in self.handlers:
+            handler = self.handlers[f"{handler_key}"]
+            analysis_tf = handler.get_analysis()
+            handler_summary = analysis_tf.summary
+            summary.append(handler_summary)
+            recommendations.append(handler_summary["RECOMMENDATION"])
+        recommendations = np.array(recommendations)
+
+        if np.alltrue("BUY" in recommendations):
+            self.signal = 1
+        elif np.alltrue("SELL" in recommendations):
+            self.signal = -1
+        else:
+            self.signal = 0
+
+        self.summary = summary
+
 
 # %%
+th = ThreadedTAHandler("bnbusdt", ["1m", "5m"], 1)
 
 
 API_KEY = os.environ.get("API_KEY")
@@ -24,9 +91,11 @@ brm = ubr.BinanceRestApiManager(
 bwsm = ubw.BinanceWebSocketApiManager(
     output_default="UnicornFy", exchange="binance.com-futures"
 )
+json.
 
+ex_info = brm.get_exchange_info()
+json.dumps(ex_info, )
 
-# %%
 
 def f_price(price):
     return f"{price:.2f}"
@@ -92,7 +161,7 @@ class OrderMaker:
         self.tp_price = None
         self.qty = None
 
-    def send_order(self, symbol, tp, qty, side="BUY", protect=False):
+    def send_order(self, symbol, tp, qty, side="BUY", protect=False, sl=None):
         if side == "SELL":
             self.side = "SELL"
             self.counterside = "BUY"
@@ -145,6 +214,24 @@ class OrderMaker:
                 except BinanceAPIException as error:
                     print(type(error))
                     print("tp order, ", error)
+                if sl is not None:
+                    self.tp_price = f_price(compute_exit(
+                        self.entry_price, sl, side=self.counterside))
+                    try:
+                        self.sl_order = self.client.futures_create_order(
+                            symbol=symbol,
+                            side=self.counterside,
+                            type="LIMIT",
+                            price=self.tp_price,
+                            workingType="CONTRACT_PRICE",
+                            quantity=self.qty,
+                            reduceOnly=True,
+                            priceProtect=protect,
+                            timeInForce="GTC",
+                        )
+                    except BinanceAPIException as error:
+                        print(type(error))
+                        print("tp order, ", error)
 
     def send_tp_order(self, symbol):
         try:
