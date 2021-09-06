@@ -118,11 +118,17 @@ def compute_exit(entry_price, target_profit, side, entry_fee=0.04, exit_fee=0.04
     use `side` contrary to your position
     """
     if side == "BUY":
-        exit_price = entry_price * \
-            (1 + target_profit/100 + entry_fee/100)/(1-exit_fee/100)
+        exit_price = (
+            entry_price
+            * (1 + target_profit / 100 + entry_fee / 100)
+            / (1 - exit_fee / 100)
+        )
     elif side == "SELL":
-        exit_price = entry_price * \
-            (1 - target_profit/100 - entry_fee/100)/(1 + exit_fee/100)
+        exit_price = (
+            entry_price
+            * (1 - target_profit / 100 - entry_fee / 100)
+            / (1 + exit_fee / 100)
+        )
     return exit_price
 
 
@@ -169,10 +175,13 @@ def check_signals(handlers):
         handler = handlers[f"{handler_key}"]
         analysis_tf = handler.get_analysis()
         recommendation = analysis_tf.summary["RECOMMENDATION"]
-        #print(recommendation)
+        # print(recommendation)
         if "BUY" not in recommendation:
             signal = not signal
     return signal
+
+
+substring_check = np.frompyfunc((lambda s, array: s in array), 2, 1)
 
 # LOGGER CONFIG
 

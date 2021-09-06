@@ -75,3 +75,6 @@ def rows_to_csv(rows: list, num_rows: int, path: str):
             row.to_csv(path, header=True, mode="w", index=False)
         elif i > 0:
             row.to_csv(path, header=False, mode="a", index=False)
+
+
+substring_check = np.frompyfunc((lambda s, array: s in array), 2, 1)

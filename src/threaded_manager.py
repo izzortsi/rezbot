@@ -40,12 +40,12 @@ class ThreadedManager:
 
         if trader_name not in self.get_traders():
 
-            handler = ThreadedTAHandler(
-                symbol, ["1m", "5m"], (60//self.rate))
+            handler = ThreadedTAHandler(symbol, ["1m", "5m"], self.rate)
             self.ta_handlers[trader_name] = handler
-            
-            trader = ThreadedATrader(self, trader_name, strategy,
-                             symbol, leverage, is_real, qty)
+
+            trader = ThreadedATrader(
+                self, trader_name, strategy, symbol, leverage, is_real, qty
+            )
             self.traders[trader.name] = trader
 
             return trader
@@ -88,7 +88,8 @@ class ThreadedManager:
 
     def pcheck(self):
         for name, trader in self.get_traders():
-            print(f"""
+            print(
+                f"""
             trader: {trader.name}
             number of trades: {trader.num_trades}
             is positioned? {trader.is_positioned}
@@ -99,7 +100,8 @@ class ThreadedManager:
             current percentual profit (unleveraged): {trader.current_percentual_profit}
             current absolute profit (unleveraged): {trader.current_profit}
             cummulative leveraged profit: {trader.cum_profit}
-                    """)
+                    """
+            )
 
     def market_overview(self):
         """
@@ -120,10 +122,10 @@ class ThreadedManager:
         self.is_monitoring = True
         self.monitor = threading.Thread(
             target=self._monitoring,
-            args=(sleep, ),
+            args=(sleep,),
         )
         self.monitor.setDaemon(True)
         self.monitor.start()
-    
+
     def stop_monitoring(self):
         self.is_monitoring = False

@@ -6,6 +6,8 @@ import tradingview_ta
 import time
 import numpy as np
 
+substring_check = np.frompyfunc((lambda s, array: s in array), 2, 1)
+
 
 class ThreadedTAHandler(threading.Thread):
     def __init__(self, symbol, tframes, rate):
@@ -17,7 +19,7 @@ class ThreadedTAHandler(threading.Thread):
         self.signal = 0
         self.handlers = {}
         self.make_handlers()
-        #self.threaded_handler = self.start_threaded_handler()
+        # self.threaded_handler = self.start_threaded_handler()
         self.keep_alive = True
         self.daemon = True
         self.printing = False
@@ -28,7 +30,7 @@ class ThreadedTAHandler(threading.Thread):
             self.check_signals()
             if self.printing:
                 print(self.summary, self.signal)
-            time.sleep(self.rate)
+            time.sleep(60 / self.rate)
 
     def stop(self):
         self.keep_alive = False
@@ -58,9 +60,9 @@ class ThreadedTAHandler(threading.Thread):
             recommendations.append(handler_summary["RECOMMENDATION"])
         recommendations = np.array(recommendations)
 
-        if np.alltrue("BUY" in recommendations):
+        if np.all(substring_check("BUY", recommendations)):
             self.signal = 1
-        elif np.alltrue("SELL" in recommendations):
+        elif np.all(substring_check("SELL", recommendations)):
             self.signal = -1
         else:
             self.signal = 0
