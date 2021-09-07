@@ -16,6 +16,7 @@ parser.add_argument("-xw", "--exit_window", default=0, type=int)
 parser.add_argument("-L", "--leverage", default=10, type=int)
 parser.add_argument("-R", "--is_real", default=False, type=bool)
 parser.add_argument("-Q", "--qty", default=1, type=float)
+parser.add_argument("-S", "--symbol", default="", type=str)
 args = parser.parse_args()
 
 rate = args.rate
@@ -26,6 +27,7 @@ ew = args.entry_window
 xw = args.exit_window
 is_real = args.is_real
 qty = args.qty
+symbol = args.symbol
 # %%
 
 # from src.grabber import *
@@ -44,13 +46,12 @@ if __name__ == "__main__":
     symbols = ["ethusdt", "bnbusdt", "btcusdt", "xrpusdt"]
 
     # %%
-
-    # t1 = m.start_trader(strat, symbols[0], leverage=leverage, is_real=is_real, qty=qty)
-    t2 = m.start_trader(strat, symbols[1], leverage=leverage, is_real=is_real, qty=qty)
-    # t3 = m.start_trader(
-    #     strat, symbols[2], leverage=leverage, is_real=is_real, qty=qty)
-    # t4 = m.start_trader(
-    #     strat, symbols[3], leverage=leverage, is_real=is_real, qty=qty)
+    t0 = m.start_trader(strat, symbols[0], leverage=leverage, is_real=is_real, qty=qty)
+    t1 = m.start_trader(strat, symbols[1], leverage=leverage, is_real=is_real, qty=qty)
+    # t2 = m.start_trader(strat, symbols[2], leverage=leverage, is_real=is_real, qty=qty)
+    # t3 = m.start_trader(strat, symbols[3], leverage=leverage, is_real=is_real, qty=qty)
+    if symnol != "":
+        t4 = m.start_trader(strat, symbols, leverage=leverage, is_real=is_real, qty=qty)
 # %%
 # rate = 60
 # m = ThreadedManager(API_KEY, API_SECRET, rate=rate)
