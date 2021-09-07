@@ -1,4 +1,3 @@
-
 # %%
 
 import pandas as pd
@@ -12,6 +11,7 @@ import os
 import threading
 import time
 import tradingview_ta as ta
+
 # %%
 
 
@@ -25,7 +25,7 @@ class ThreadedTAHandler(threading.Thread):
         self.signal = 0
         self.handlers = {}
         self.make_handlers()
-        #self.threaded_handler = self.start_threaded_handler()
+        # self.threaded_handler = self.start_threaded_handler()
         self.keep_alive = True
         self.daemon = True
         self.printing = False
@@ -79,6 +79,8 @@ class ThreadedTAHandler(threading.Thread):
 # %%
 th = ThreadedTAHandler("bnbusdt", ["1m", "5m"], 1)
 
+# %%
+
 
 API_KEY = os.environ.get("API_KEY")
 API_SECRET = os.environ.get("API_SECRET")
@@ -87,14 +89,22 @@ API_SECRET = os.environ.get("API_SECRET")
 # %%
 
 brm = ubr.BinanceRestApiManager(
-    api_key=API_KEY, api_secret=API_SECRET, exchange="binance.com-futures")
+    api_key=API_KEY, api_secret=API_SECRET, exchange="binance.com-futures"
+)
 bwsm = ubw.BinanceWebSocketApiManager(
     output_default="UnicornFy", exchange="binance.com-futures"
 )
-json.
 
-ex_info = brm.get_exchange_info()
-json.dumps(ex_info, )
+# %%
+
+
+info_data = brm.get_exchange_info()
+
+
+# %%
+ex_info
+
+# %%
 
 
 def f_price(price):
@@ -114,11 +124,17 @@ B = "BUY"
 # %%
 def compute_exit(entry_price, target_profit, side, entry_fee=0.04, exit_fee=0.04):
     if side == "BUY":
-        exit_price = entry_price * \
-            (1 + target_profit/100 + entry_fee/100)/(1-exit_fee/100)
+        exit_price = (
+            entry_price
+            * (1 + target_profit / 100 + entry_fee / 100)
+            / (1 - exit_fee / 100)
+        )
     elif side == "SELL":
-        exit_price = entry_price * \
-            (1 - target_profit/100 - entry_fee/100)/(1 + exit_fee/100)
+        exit_price = (
+            entry_price
+            * (1 - target_profit / 100 - entry_fee / 100)
+            / (1 + exit_fee / 100)
+        )
     return exit_price
 
 
@@ -126,19 +142,19 @@ def compute_exit(entry_price, target_profit, side, entry_fee=0.04, exit_fee=0.04
 ep = 499.86
 sl_p = compute_exit(ep, 0.1, side="SELL")
 # %%
-100*(sl_p - ep)/ep
+100 * (sl_p - ep) / ep
 # %%
 
 sl_p
 # %%
 xp = compute_exit(ep, 1, side="BUY")
 # %%
-100*(xp - ep)/ep
+100 * (xp - ep) / ep
 # %%
 xp
 
 # %%
-handler = ThreadedTAHandler("BNBUSDT", ["1m", "5m"], rate=1)
+handler = ThreadedTAHandler("BNBUSDT", ["1m", "5m"], rate=60)
 # %%
 handler.signal
 # %%
@@ -184,14 +200,14 @@ class OrderMaker:
                 print("positioning, ", error)
             else:
                 self.is_positioned = True
-                self.position = self.client.futures_position_information(
-                    symbol=symbol)
+                self.position = self.client.futures_position_information(symbol=symbol)
                 self.entry_price = float(self.position[0]["entryPrice"])
                 self.qty = self.position[0]["positionAmt"]
                 # tp_price = f_tp_price(price, tp, lev, side=side)
                 # sl_price = f_sl_price(price, sl, lev, side=side)
-                self.tp_price = f_price(compute_exit(
-                    self.entry_price, tp, side=self.side))
+                self.tp_price = f_price(
+                    compute_exit(self.entry_price, tp, side=self.side)
+                )
 
                 print(
                     f"""price: {self.entry_price}
@@ -215,14 +231,15 @@ class OrderMaker:
                     print(type(error))
                     print("tp order, ", error)
                 if sl is not None:
-                    self.tp_price = f_price(compute_exit(
-                        self.entry_price, sl, side=self.counterside))
+                    self.sl_price = f_price(
+                        compute_exit(self.entry_price, sl, side=self.counterside)
+                    )
                     try:
                         self.sl_order = self.client.futures_create_order(
                             symbol=symbol,
                             side=self.counterside,
                             type="LIMIT",
-                            price=self.tp_price,
+                            price=self.sl_price,
                             workingType="CONTRACT_PRICE",
                             quantity=self.qty,
                             reduceOnly=True,
@@ -231,13 +248,24 @@ class OrderMaker:
                         )
                     except BinanceAPIException as error:
                         print(type(error))
-                        print("tp order, ", error)
+                        print("sl order, ", error)
 
-    def send_tp_order(self, symbol):
+    def send_tp_order(self, symbol, side, tp, protect=False):
+        if side == "SELL":
+            counterside = "BUY"
+        elif side == "BUY":
+            counterside = "SELL"
+        self.position = self.client.futures_position_information(symbol=symbol)
+        self.entry_price = float(self.position[0]["entryPrice"])
+        self.qty = self.position[0]["positionAmt"]
+        # tp_price = f_tp_price(price, tp, lev, side=side)
+        # sl_price = f_sl_price(price, sl, lev, side=side)
+        self.tp_price = f_price(compute_exit(self.entry_price, tp, side=side))
+
         try:
             self.tp_order = self.client.futures_create_order(
                 symbol=symbol,
-                side=self.counterside,
+                side=counterside,
                 type="LIMIT",
                 price=self.tp_price,
                 workingType="CONTRACT_PRICE",
@@ -262,7 +290,29 @@ handler.summary
 omaker.send_order(symbol, 0.1, 0.02, side=B)
 
 # %%
+omaker.send_tp_order(symbol, B, 0.04)
+# %%
 handler.stop()
 ep = omaker.entry_price
 tpp = float(omaker.tp_price)
-100*(tpp - ep)/ep
+100 * (tpp - ep) / ep
+
+# %%
+o = omaker.tp_order
+
+# %%
+o
+
+# %%
+
+
+# %%
+orders
+# %%
+
+o["orderId"]
+# %%
+brm.futures_get_order(symbol=symbol.upper(), orderId=o["orderId"])
+
+
+# %%

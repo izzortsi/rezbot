@@ -32,8 +32,7 @@ class MacdStrategy:
 
         condition1 = trader.current_percentual_profit >= self.take_profit
 
-        condition2 = np.alltrue(
-            trader.data_window.histogram.tail(self.exit_window) > 0)
+        condition2 = np.alltrue(trader.data_window.histogram.tail(self.exit_window) > 0)
         check = condition1 and condition2
 
         return check
@@ -66,12 +65,16 @@ class TAStrategy:
 
     def entry_signal(self, trader):
 
-        if (np.alltrue(trader.data_window.histogram.tail(self.entry_window) < 0)
-                and trader.ta_handler.signal == 1):
+        if (
+            np.alltrue(trader.data_window.histogram.tail(self.entry_window) < 0)
+            and trader.ta_handler.signal == 1
+        ):
             trader.position_type = 1
             return True
-        elif (np.alltrue(trader.data_window.histogram.tail(self.entry_window) > 0)
-              and trader.ta_handler.signal == -1):
+        elif (
+            np.alltrue(trader.data_window.histogram.tail(self.entry_window) > 0)
+            and trader.ta_handler.signal == -1
+        ):
             trader.position_type = -1
             return True
         else:
@@ -89,6 +92,8 @@ class TAStrategy:
 
     def stoploss_check(self, trader):
 
-        check = trader.current_percentual_profit <= self.stoploss
+        condition1 = trader.current_percentual_profit <= self.stoploss
+        condition2 = trader.position_type == -trader.ta_handler.signal
+        check = condition1 and condition2
 
         return check

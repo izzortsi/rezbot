@@ -1,4 +1,4 @@
-   def _really_act_on_signal(self):
+   def _really_act_on_signal_limit(self):
         """
         aqui eu tenho que
         1) mudar o sinal de entrada pra incluir as duas direçoes
@@ -49,39 +49,40 @@
             self.position = self.client.futures_position_information(
                 symbol=self.symbol)
             self.entry_price = float(self.position[0]["entryPrice"])
+            self.tp_price = compute_exit(self.entry_price, self.take_profit, side=counterside)
             tp_price = self.price_formatter(
-                self.entry_price + self.entry_price * self.take_profit/100)
+                self.tp_price)
 
             try:
                 self.tp_order = self.client.futures_create_order(
                     symbol=self.symbol,
                     side=counterside,
-                    type="TAKE_PROFIT_MARKET",
-                    stopPrice=tp_price,
+                    type="LIMIT",
+                    price=self.tp_price,
                     workingType="CONTRACT_PRICE",
                     quantity=self.qty,
                     reduceOnly=True,
                     priceProtect=protect,
-                    timeInForce="GTE_GTC",
+                    timeInForce="GTC",
                 )
             except BinanceAPIException as error:
 
                 print(type(error))
                 print("tp order, ", error)
 
-            try:
-                self.sl_order = self.client.futures_create_order(
-                    symbol=self.symbol,
-                    side=counterside,
-                    type="TAKE_PROFIT_MARKET",
-                    stopPrice=tp_price,
-                    workingType="CONTRACT_PRICE",
-                    quantity=self.qty,
-                    reduceOnly=True,
-                    priceProtect=protect,
-                    timeInForce="GTE_GTC",
-                )
-            except BinanceAPIException as error:
-
-                print(type(error))
-                print("sl order, ", error)
+            # try:
+            #     self.sl_order = self.client.futures_create_order(
+            #         symbol=self.symbol,
+            #         side=counterside,
+            #         type="LIMIT",
+            #         price=self.sl_price,
+            #         workingType="CONTRACT_PRICE",
+            #         quantity=self.qty,
+            #         reduceOnly=True,
+            #         priceProtect=protect,
+            #         timeInForce="GTC",
+            #     )
+            # except BinanceAPIException as error:
+            #
+            #     print(type(error))
+            #     print("sl order, ", error)

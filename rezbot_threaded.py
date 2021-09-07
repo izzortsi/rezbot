@@ -9,11 +9,11 @@ import argparse
 # %%
 parser = argparse.ArgumentParser()
 parser.add_argument("-r", "--rate", default=1, type=int)
-parser.add_argument("-sl", "--stoploss", default=-0.2, type=float)
-parser.add_argument("-tp", "--takeprofit", default=1.5, type=float)
-parser.add_argument("-ew", "--entry_window", default=2, type=int)
-parser.add_argument("-xw", "--exit_window", default=1, type=int)
-parser.add_argument("-L", "--leverage", default=1, type=int)
+parser.add_argument("-sl", "--stoploss", default=-0.15, type=float)
+parser.add_argument("-tp", "--takeprofit", default=0.08, type=float)
+parser.add_argument("-ew", "--entry_window", default=5, type=int)
+parser.add_argument("-xw", "--exit_window", default=0, type=int)
+parser.add_argument("-L", "--leverage", default=10, type=int)
 parser.add_argument("-R", "--is_real", default=False, type=bool)
 parser.add_argument("-Q", "--qty", default=1, type=float)
 args = parser.parse_args()
@@ -45,10 +45,8 @@ if __name__ == "__main__":
 
     # %%
 
-    t1 = m.start_trader(
-        strat, symbols[0], leverage=leverage, is_real=is_real, qty=qty)
-    t2 = m.start_trader(
-        strat, symbols[1], leverage=leverage, is_real=is_real, qty=qty)
+    # t1 = m.start_trader(strat, symbols[0], leverage=leverage, is_real=is_real, qty=qty)
+    t2 = m.start_trader(strat, symbols[1], leverage=leverage, is_real=is_real, qty=qty)
     # t3 = m.start_trader(
     #     strat, symbols[2], leverage=leverage, is_real=is_real, qty=qty)
     # t4 = m.start_trader(

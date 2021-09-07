@@ -28,7 +28,7 @@ tp_order = brm.futures_create_order(
 
 sl_price = compute_exit(price, 0.14, side="SELL", exit_fee=0.02)
 # %%
-100*(sl_price - price)/price
+100 * (sl_price - price) / price
 # %%
 
 sl_price = f_price(sl_price)
@@ -50,7 +50,7 @@ sl_order = brm.futures_create_order(
     timeInForce="GTC",
 )
 # %%
-(0.02*499.83)*0.0004
+(0.02 * 499.83) * 0.0004
 
 
 def send_order(tp, qty, side="BUY", protect=False):
@@ -96,7 +96,7 @@ def send_order(tp, qty, side="BUY", protect=False):
                 quantity=qty,
                 reduceOnly=True,
                 priceProtect=protect,
-                timeInForce="GTE_GTC",
+                timeInForce="GTC",
             )
         except BinanceAPIException as error:
             print(type(error))
