@@ -50,7 +50,7 @@ if __name__ == "__main__":
     t1 = m.start_trader(strat, symbols[1], leverage=leverage, is_real=is_real, qty=qty)
     # t2 = m.start_trader(strat, symbols[2], leverage=leverage, is_real=is_real, qty=qty)
     # t3 = m.start_trader(strat, symbols[3], leverage=leverage, is_real=is_real, qty=qty)
-    if symnol != "":
+    if symbol != "":
         t4 = m.start_trader(strat, symbols, leverage=leverage, is_real=is_real, qty=qty)
 # %%
 # rate = 60
