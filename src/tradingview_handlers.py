@@ -70,12 +70,14 @@ class ThreadedTAHandler(threading.Thread):
         self.summary = summary
 
 
-# %%
-# th = ThreadedTAHandler("bnbusdt", ["1m", "5m"], 5)
+# # %%
+# th = ThreadedTAHandler("bnbusdt", ["1m", "5m"], 60)
 # th.start()
 # th.isDaemon()
-# th.summaries
-
+# th.summary
+#
+# # %%
+# th.printing=True
 # # %%
 # th.is_alive()
 # # %%

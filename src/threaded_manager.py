@@ -34,7 +34,7 @@ class ThreadedManager:
 
         self.is_monitoring = False
 
-    def start_trader(self, strategy, symbol, leverage=1, is_real=False, qty=0.002):
+    def start_trader(self, strategy, symbol, leverage=1, is_real=False, qty=1):
 
         trader_name = name_trader(strategy, symbol)
 

@@ -6,8 +6,8 @@ import os
 
 # %%
 
-key = os.environ.get(API_KEY)
-secret = os.environ.get(API_SECRET)
+key = os.environ.get("API_KEY")
+secret = os.environ.get("API_SECRET")
 
 client = BinanceRestApiManager()
 # %%
@@ -65,7 +65,7 @@ analysis.indicators["MACD.signal"]
 tfs = ["1m", "5m"]
 
 # %%
-handlers = make_handlers("SUSHIUSDT", tfs)
+handlers = make_handlers("BNBUSDT", tfs)
 handlers
 
 # %%
