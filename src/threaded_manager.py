@@ -12,13 +12,13 @@
 
 from src import *
 from src.threaded_atrader import ThreadedATrader
-from src.tradingview_handlers import ThreadedTAHandler
+from src.tradingview_handlers import Analyst
 import threading
 import time
 
 
 class ThreadedManager:
-    def __init__(self, api_key, api_secret, rate=1):
+    def __init__(self, api_key, api_secret, symbols, tframes, rate=1):
 
         self.client = Client(
             api_key=api_key, api_secret=api_secret, exchange="binance.com-futures"
@@ -26,22 +26,36 @@ class ThreadedManager:
         self.bwsm = BinanceWebSocketApiManager(
             output_default="UnicornFy", exchange="binance.com-futures"
         )
-
+        self.symbols = [s.upper() for s in symbols]
         self.rate = rate  # debbug purposes. will be removed
+        self.tframes = tframes
+        self.summaries = {
+            symbol: {tf: None for tf in self.tframes} for symbol in self.symbols
+        }
+        self.indicators = {
+            symbol: {tf: None for tf in self.tframes} for symbol in self.symbols
+        }
+        self.signals = {
+            symbol: {tf: None for tf in self.tframes} for symbol in self.symbols
+        }
 
+        self.qty = {symbol: None for symbol in self.symbols}
+        self.price_formatter = {symbol: None for symbol in self.symbols}
         self.traders = {}
-        self.ta_handlers = {}
+        self.handlers = {}
+        self.signals_df = None
 
         self.is_monitoring = False
+
+    def make_analysts(self):
+        for tf in self.tframes:
+            self.analysts[tf] = Analyst(self, tf, self.rate)
 
     def start_trader(self, strategy, symbol, leverage=1, is_real=False, qty=1):
 
         trader_name = name_trader(strategy, symbol)
 
         if trader_name not in self.get_traders():
-
-            handler = ThreadedTAHandler(symbol, ["1m", "5m"], self.rate)
-            self.ta_handlers[trader_name] = handler
 
             trader = ThreadedATrader(
                 self, trader_name, strategy, symbol, leverage, is_real, qty
@@ -96,7 +110,7 @@ class ThreadedManager:
             position type: {trader.position_type}
             entry price: {trader.entry_price}
             last price: {trader.last_price}
-            TV signals: {[s["RECOMMENDATION"] for s in self.ta_handlers[name].summary]}, {self.ta_handlers[name].signal}
+            TV signals: {s for s in self.summaries[name]]}
             current percentual profit (unleveraged): {trader.current_percentual_profit}
             current absolute profit (unleveraged): {trader.current_profit}
             cummulative leveraged profit: {trader.cum_profit}

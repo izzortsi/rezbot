@@ -34,7 +34,13 @@ symbol = args.symbol
 # from src.strategy import *
 if __name__ == "__main__":
 
-    m = ThreadedManager(API_KEY, API_SECRET, rate=rate)
+    m = ThreadedManager(
+        API_KEY,
+        API_SECRET,
+        ["ethusdt", "bnbusdt", "btcusdt", "xrpusdt"],
+        ["1m", "5m", "15m"],
+        rate=rate,
+    )
 
     # macd_params = {"fast": 7, "slow": 14, "signal": 5}
 
@@ -46,12 +52,12 @@ if __name__ == "__main__":
     symbols = ["ethusdt", "bnbusdt", "btcusdt", "xrpusdt"]
 
     # %%
-    t0 = m.start_trader(strat, symbols[0], leverage=leverage, is_real=is_real, qty=qty)
-    t1 = m.start_trader(strat, symbols[1], leverage=leverage, is_real=is_real, qty=qty)
+    # t0 = m.start_trader(strat, symbols[0], leverage=leverage, is_real=is_real, qty=qty)
+    # t1 = m.start_trader(strat, symbols[1], leverage=leverage, is_real=is_real, qty=qty)
     # t2 = m.start_trader(strat, symbols[2], leverage=leverage, is_real=is_real, qty=qty)
     # t3 = m.start_trader(strat, symbols[3], leverage=leverage, is_real=is_real, qty=qty)
-    if symbol != "":
-        t4 = m.start_trader(strat, symbols, leverage=leverage, is_real=is_real, qty=qty)
+    # if symbol != "":
+    #     t4 = m.start_trader(strat, symbol, leverage=leverage, is_real=is_real, qty=qty)
 # %%
 # rate = 60
 # m = ThreadedManager(API_KEY, API_SECRET, rate=rate)

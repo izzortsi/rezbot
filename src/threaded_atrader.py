@@ -46,30 +46,6 @@ class ThreadedATrader(threading.Thread):
                 print(self.qty)
                 print(self.price_formatter(price))
 
-            elif self.symbol == "ethusdt" or self.symbol == "ETHUSDT":
-                min_qty = 0.001
-                ticker = self.client.get_symbol_ticker(symbol=self.symbol.upper())
-                price = float(ticker["price"])
-                multiplier = qty * np.ceil(5 / (price * min_qty))
-                self.qty = f"{(multiplier*min_qty):.3f}"
-                self.price_formatter = lambda x: f"{x:.2f}"
-            elif self.symbol == "bnbusdt" or self.symbol == "BNBUSDT":
-                min_qty = 0.01
-                ticker = self.client.get_symbol_ticker(symbol=self.symbol.upper())
-                price = float(ticker["price"])
-                multiplier = qty * np.ceil(5 / (price * min_qty))
-                self.qty = f"{(multiplier*min_qty):.2f}"
-                self.price_formatter = lambda x: f"{x:.2f}"
-            elif self.symbol == "btcusdt" or self.symbol == "BTCUSDT":
-                min_qty = 0.001
-                ticker = self.client.get_symbol_ticker(symbol=self.symbol.upper())
-                price = float(ticker["price"])
-                multiplier = qty * np.ceil(5 / (price * min_qty))
-                self.qty = f"{(multiplier*min_qty):.3f}"
-                self.price_formatter = lambda x: f"{x:.3f}"
-            else:
-                raise Exception("symbol not allowed")
-
             self.client.futures_change_leverage(
                 symbol=self.symbol, leverage=self.leverage
             )
@@ -134,6 +110,7 @@ class ThreadedATrader(threading.Thread):
     def run(self):
 
         while self.keep_running:
+            self.stream_processer._process_stream_data(self)
             if self.is_real:
                 self._really_act_on_signal_limit()
             else:

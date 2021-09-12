@@ -1,16 +1,10 @@
 from src import *
 from src.grabber import DataGrabber
-from src.stream_processer import StreamProcesser
 from unicorn_binance_rest_api.unicorn_binance_rest_api_exceptions import *
-import threading
 
 
-class ThreadedATrader(threading.Thread):
+class ATrader:
     def __init__(self, manager, name, strategy, symbol, leverage, is_real, qty):
-
-        threading.Thread.__init__(self)
-
-        self.setDaemon(True)
 
         self.name = name
         self.manager = manager
@@ -28,7 +22,7 @@ class ThreadedATrader(threading.Thread):
                 ticker = self.client.get_symbol_ticker(
                     symbol=self.symbol.upper())
                 price = float(ticker["price"])
-                multiplier = qty*np.ceil(5 / (price * min))
+                multiplier = np.ceil(5 / (price * min))
                 self.qty = f"{(multiplier*min):.3f}"
                 self.price_formatter = lambda x: f"{x:.3f}"
             elif self.symbol == "bnbusdt" or self.symbol == "BNBUSDT":
@@ -36,7 +30,7 @@ class ThreadedATrader(threading.Thread):
                 ticker = self.client.get_symbol_ticker(
                     symbol=self.symbol.upper())
                 price = float(ticker["price"])
-                multiplier = qty*np.ceil(5 / (price * min))
+                multiplier = np.ceil(5 / (price * min))
                 self.qty = f"{(multiplier*min):.2f}"
                 self.price_formatter = lambda x: f"{x:.2f}"
             elif self.symbol == "btcusdt" or self.symbol == "BTCUSDT":
@@ -44,12 +38,21 @@ class ThreadedATrader(threading.Thread):
                 ticker = self.client.get_symbol_ticker(
                     symbol=self.symbol.upper())
                 price = float(ticker["price"])
-                multiplier = qty*np.ceil(5 / (price * min))
+                multiplier = np.ceil(5 / (price * min))
                 self.qty = f"{(multiplier*min):.3f}"
                 self.price_formatter = lambda x: f"{x:.3f}"
+
+            elif self.symbol == "xrpusdt" or self.symbol == "XRPUSDT":
+                min = 0.1
+                ticker = self.client.get_symbol_ticker(
+                    symbol=self.symbol.upper())
+                price = float(ticker["price"])
+                multiplier = np.ceil(5 / (price * min))
+                self.qty = f"{(multiplier*min):.1f}"
+                self.price_formatter = lambda x: f"{x:.1f}"
             else:
                 raise Exception(
-                    "symbol not allowed"
+                    "as of now the only allowed symbols are 'ethusdt' and 'bnbusdt'"
                 )
 
             self.client.futures_change_leverage(
@@ -110,18 +113,6 @@ class ThreadedATrader(threading.Thread):
         )
         self.confirmatory_data = []
 
-        self._start_new_stream()
-        self.start()
-
-    def run(self):
-
-        while self.keep_running:
-            if self.is_real:
-                self._really_act_on_signal()
-            else:
-                self._test_act_on_signal()
-            self._drop_trades_to_csv()
-
     def stop(self):
         self.keep_running = False
         self.bwsm.stop_stream(self.stream_id)
@@ -130,6 +121,21 @@ class ThreadedATrader(threading.Thread):
 
     def is_alive(self):
         return self.worker.is_alive()
+
+    def status(self):
+        status = (
+            self.is_alive(),
+            self.is_positioned,
+        )
+        print(
+            f"""uptime: {to_datetime_tz(self.now) - to_datetime_tz(self.start_time)};
+              Δ%*leverage: {to_percentual(self.last_price, self.entry_price, leverage = self.leverage)}
+              leverage: {self.leverage};
+              status: Alive? Positioned? {status}
+              """
+        )
+        # print(f"Is alive? {status[0]}; Is positioned? {status[1]}")
+        return status
 
     def _side_from_int(self):
         if self.position_type == -1:
@@ -198,9 +204,103 @@ class ThreadedATrader(threading.Thread):
             channel, market, stream_buffer_name=stream_name
         )
 
+        worker = threading.Thread(
+            target=self._process_stream_data,
+            args=(),
+        )
+        worker.setDaemon(True)
+        worker.start()
+
         self.stream_name = stream_name
-        self.stream_processer = StreamProcesser(self)
+        self.worker = worker
         self.stream_id = stream_id
+
+    def _process_stream_data(self):
+
+        while self.keep_running:
+            time.sleep(0.2)
+            if self.bwsm.is_manager_stopping():
+                exit(0)
+
+            data_from_stream_buffer = self.bwsm.pop_stream_data_from_stream_buffer(
+                self.stream_name
+            )
+
+            if data_from_stream_buffer is False:
+                time.sleep(0.01)
+
+            else:
+                try:
+                    if data_from_stream_buffer["event_type"] == "kline":
+
+                        kline = data_from_stream_buffer["kline"]
+
+                        o = float(kline["open_price"])
+                        h = float(kline["high_price"])
+                        l = float(kline["low_price"])
+                        c = float(kline["close_price"])
+                        # v = float(kline["base_volume"])
+                        #
+                        # num_trades = int(kline["number_of_trades"])
+                        # is_closed = bool(kline["is_closed"])
+
+                        last_index = self.data_window.index[-1]
+
+                        self.now = time.time()
+                        self.now_time = to_datetime_tz(self.now)
+                        self.last_price = c
+
+                        dohlcv = pd.DataFrame(
+                            np.atleast_2d(
+                                np.array([self.now_time, o, h, l, c])),
+                            columns=["date", "open", "high", "low", "close"],
+                            index=[last_index],
+                        )
+
+                        tf_as_seconds = (
+                            interval_to_milliseconds(
+                                self.strategy.timeframe) * 0.001
+                        )
+
+                        new_close = dohlcv.close
+                        self.data_window.close.update(new_close)
+
+                        macd = self.grabber.compute_indicators(
+                            self.data_window.close, **self.strategy.macd_params
+                        )
+
+                        date = dohlcv.date
+                        new_row = pd.concat(
+                            [date, macd.tail(1)],
+                            axis=1,
+                        )
+
+                        if (
+                            int(self.now - self.init_time)
+                            >= tf_as_seconds / self.manager.rate
+                        ):
+
+                            self.data_window.drop(
+                                index=[0], axis=0, inplace=True)
+                            self.data_window = self.data_window.append(
+                                new_row, ignore_index=True
+                            )
+
+                            self.running_candles.append(dohlcv)
+                            self.init_time = time.time()
+
+                        else:
+                            self.data_window.update(new_row)
+
+                        if self.is_real:
+                            self._really_act_on_signal()
+                        else:
+                            self._test_act_on_signal()
+
+                        self._drop_trades_to_csv()
+
+                except Exception as e:
+                    self.logger.info(f"{e}")
 
     def _test_act_on_signal(self):
         """
@@ -243,18 +343,14 @@ class ThreadedATrader(threading.Thread):
 
         self.last_price = self.data_window.close.values[-1]
 
-        self.current_profit = (
-            self.position_type * (
-                self.last_price - self.entry_price)
-            - 0.0004 * (self.last_price + self.entry_price)
+        self.current_profit = self.position_type*(
+            self.last_price
+            - self.entry_price
+            #- 0.0002 * (self.last_price + self.entry_price)
         )
 
-        if self.position_type == 1:
-            self.current_percentual_profit = (
-                self.current_profit / self.entry_price) * 100
-        elif self.position_type == -1:
-            self.current_percentual_profit = (
-                self.current_profit / self.last_price) * 100
+        self.current_percentual_profit = (
+            self.current_profit / self.entry_price) * 100
 
     def _register_trade_data(self, tp_or_sl):
 
@@ -281,18 +377,14 @@ class ThreadedATrader(threading.Thread):
 
     def _set_actual_profits(self):
 
-        self.current_profit = (
-            self.position_type * (
-                self.exit_price - self.entry_price)
-            - 0.0004 * (self.exit_price + self.entry_price)
+        self.current_profit = self.position_type*(
+            self.exit_price
+            - self.entry_price
+            #- 0.0002 * (self.last_price + self.entry_price)
         )
 
-        if self.position_type == 1:
-            self.current_percentual_profit = (
-                self.current_profit / self.entry_price) * 100
-        elif self.position_type == -1:
-            self.current_percentual_profit = (
-                self.current_profit / self.exit_price) * 100
+        self.current_percentual_profit = (
+            self.current_profit / self.entry_price) * 100
 
     def _really_act_on_signal(self):
         """
@@ -300,6 +392,7 @@ class ThreadedATrader(threading.Thread):
         1) mudar o sinal de entrada pra incluir as duas direçoes
         2) essa é a função que faz os trades, efetivamente. falta isso
         """
+
         if not self.is_positioned:
             if self.strategy.entry_signal(self):
                 try:
