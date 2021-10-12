@@ -8,6 +8,9 @@ with open("exchangeInfo.json") as f:
 # %%
 symbols_dict = {}
 symbols_filters = {}
+
+# %%
+data["symbols"][0]["filters"][0]
 # %%
 
 for symbol_data in data["symbols"]:
@@ -17,9 +20,17 @@ for symbol_data in data["symbols"]:
 
         symbol = symbol_data["symbol"]
         symbols_dict[symbol] = symbol_data
+        ticksize = len(str(float(symbol_data["filters"][0]["tickSize"])).split(".")[-1])
+        print(
+            symbol,
+            float(symbol_data["filters"][0]["tickSize"]),
+            symbol_data["pricePrecision"],
+            ticksize,
+        )
         symbols_filters[symbol] = {
             "pricePrecision": symbol_data["pricePrecision"],
             "quantityPrecision": symbol_data["quantityPrecision"],
+            "tickSize": ticksize,
         }
 
 
