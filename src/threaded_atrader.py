@@ -21,7 +21,6 @@ class ThreadedATrader(threading.Thread):
         self.symbol = symbol
         self.leverage = leverage
         self.is_real = is_real
-        self.ta_handler = self.manager.ta_handlers[self.name]
 
         if self.is_real:
             if self.symbol.upper() in FORMATS.keys():
@@ -67,8 +66,6 @@ class ThreadedATrader(threading.Thread):
         self.grabber = DataGrabber(self.client)
         self.data_window = self._get_initial_data_window()
         self.running_candles = []  # self.data_window.copy(deep=True)
-        self.ta_signal = self.ta_handler.signal
-        self.ta_summary = self.ta_handler.summary
         # self.data = None
 
         self.start_time = time.time()  # wont change, used to compute uptime
@@ -110,7 +107,7 @@ class ThreadedATrader(threading.Thread):
     def run(self):
 
         while self.keep_running:
-            self.stream_processer._process_stream_data(self)
+            self.stream_processer._process_stream_data()
             if self.is_real:
                 self._really_act_on_signal_limit()
             else:
@@ -227,7 +224,7 @@ class ThreadedATrader(threading.Thread):
                 self.entry_price = self.data_window.close.values[-1]
                 self.entry_time = self.data_window.date.values[-1]
                 self.logger.info(
-                    f"ENTRY: E:{self.entry_price} at t:{self.entry_time}; signal: {self.ta_handler.signal}; type: {self.position_type}"
+                    f"ENTRY: E:{self.entry_price} at t:{self.entry_time}; type: {self.position_type}"
                 )
                 self._change_position()
 
@@ -359,7 +356,7 @@ class ThreadedATrader(threading.Thread):
             # self.qty = self.position[0]["positionAmt"]
             self.tp_price = compute_exit(self.entry_price, self.take_profit, side=side)
             self.logger.info(
-                f"ENTRY: E:{self.entry_price} at t:{self.entry_time}; signal: {self.ta_handler.signal}; type: {self.position_type}"
+                f"ENTRY: E:{self.entry_price} at t:{self.entry_time}; type: {self.position_type}"
             )
             tp_price = self.price_formatter(self.tp_price)
             print(tp_price)

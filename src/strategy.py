@@ -44,7 +44,7 @@ class MacdStrategy:
         return check
 
 
-class TAStrategy:
+class VolatilityStrategy:
     def __init__(
         self,
         name,
