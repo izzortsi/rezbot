@@ -38,7 +38,7 @@ class StreamProcesser(threading.Thread):
                 h = float(kline["high_price"])
                 l = float(kline["low_price"])
                 c = float(kline["close_price"])
-                # v = float(kline["base_volume"])
+                v = float(kline["base_volume"])
                 #
                 # num_trades = int(kline["number_of_trades"])
                 # is_closed = bool(kline["is_closed"])
@@ -52,9 +52,9 @@ class StreamProcesser(threading.Thread):
 
                 dohlcv = pd.DataFrame(
                     np.atleast_2d(
-                        np.array([self.trader.now_time, o, h, l, c])),
+                        np.array([self.trader.now_time, o, h, l, c, v])),
                     columns=["date", "open",
-                             "high", "low", "close"],
+                             "high", "low", "close", "volume"],
                     index=[last_index],
                 )
 
@@ -66,13 +66,13 @@ class StreamProcesser(threading.Thread):
                 new_close = dohlcv.close
                 self.trader.data_window.close.update(new_close)
 
-                macd = self.trader.grabber.compute_indicators(
+                indicators = self.trader.grabber.compute_indicators(
                     self.trader.data_window.close, **self.trader.strategy.macd_params
                 )
 
-                date = dohlcv.date
+                # date = dohlcv.date
                 new_row = pd.concat(
-                    [date, macd.tail(1)],
+                    [dohlcv, indicators.tail(1)],
                     axis=1,
                 )
 
@@ -87,7 +87,7 @@ class StreamProcesser(threading.Thread):
                         new_row, ignore_index=True
                     )
 
-                    self.trader.running_candles.append(dohlcv)
+                    # self.trader.running_candles.append(dohlcv)
                     self.trader.init_time = time.time()
 
                 else:

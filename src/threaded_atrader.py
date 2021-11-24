@@ -90,7 +90,7 @@ class ThreadedATrader(threading.Thread):
 
         self.grabber = DataGrabber(self.client)
         self.data_window = self._get_initial_data_window()
-        self.running_candles = []  # self.data_window.copy(deep=True)
+        # self.running_candles = []  # self.data_window.copy(deep=True)
         self.ta_signal = self.ta_handler.signal
         self.ta_summary = self.ta_handler.summary
         # self.data = None
@@ -138,7 +138,7 @@ class ThreadedATrader(threading.Thread):
                 self._really_act_on_signal_limit()
             else:
                 self._test_act_on_signal()
-            self._drop_trades_to_csv()
+            # self._drop_trades_to_csv()
 
     def stop(self):
         self.keep_running = False
@@ -196,10 +196,10 @@ class ThreadedATrader(threading.Thread):
         date = klines.date
 
         df = self.grabber.compute_indicators(
-            klines.close, is_macd=True, **self.strategy.macd_params
+            klines, **self.strategy.macd_params
         )
 
-        df = pd.concat([date, df], axis=1)
+        df = pd.concat([klines, df], axis=1)
         return df
 
     def _start_new_stream(self):

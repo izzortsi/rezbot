@@ -40,7 +40,7 @@ class ThreadedManager:
 
         if trader_name not in self.get_traders():
 
-            handler = ThreadedTAHandler(symbol, ["1m", "5m"], self.rate)
+            handler = ThreadedTAHandler(symbol, ["1m"], self.rate)
             self.ta_handlers[trader_name] = handler
 
             trader = ThreadedATrader(

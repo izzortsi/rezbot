@@ -37,41 +37,46 @@ class DataGrabber:
         DOHLCV.columns = ["date", "open", "high", "low", "close", "volume"]
         return DOHLCV
 
-    def compute_indicators(self, ohlcv, is_macd=True, indicators=[], **params):
+    def compute_indicators(self, ohlcv, w1=5, w2=10, **params):
+        
+        
 
-        if is_macd:
+        # df = pd.concat([c, macd], axis=1)
 
-            c = ohlcv
-            values = [str(value) for value in list(params.values())]
-            macd = ta.macd(c, **params)
-            lengths = "_".join(values)
-            macd.rename(
-                columns={
-                    f"MACD_{lengths}": "macd",
-                    f"MACDh_{lengths}": "histogram",
-                    f"MACDs_{lengths}": "signal",
-                },
-                inplace=True,
-            )
 
-            df = pd.concat([c, macd], axis=1)
-            return df
-        else:
+        c = ohlcv["close"]
+        h = ohlcv["high"]
+        l = ohlcv["low"]
+        v = ohlcv["volume"]
 
-            c = ohlcv["close"]
-            h = ohlcv["high"]
-            l = ohlcv["low"]
-            v = ohlcv["volume"]
+        values = [str(value) for value in list(params.values())]
+        macd = ta.macd(c, **params)
+        lengths = "_".join(values)
+        macd.rename(
+            columns={
+                f"MACD_{lengths}": "macd",
+                f"MACDh_{lengths}": "histogram",
+                f"MACDs_{lengths}": "signal",
+            },
+            inplace=True,
+        )
 
-            cs = ta.vwma(h, v, length=3)
-            cs.rename("csup", inplace=True)
+        price_pos = (c-l)/(h-l)
+        pmean1 = c.ewm(span=w1).mean()
+        pstd1 = c.ewm(span=w1).std()
 
-            cm = ta.vwma(c, v, length=3)
-            cm.rename("cmed", inplace=True)
 
-            ci = ta.vwma(l, v, length=3)
-            ci.rename("cinf", inplace=True)
+        # cs = ta.vwma(h, v, length=3)
+        # cs.rename("csup", inplace=True)
+        # cm = ta.vwma(c, v, length=3)
+        # cm.rename("cmed", inplace=True)
+        # ci = ta.vwma(l, v, length=3)
+        # ci.rename("cinf", inplace=True)
+        
+        # ind_df = pd.concat([cs, cm, ci, macd], axis=1)
+        ind_df = pd.concat([macd, price_pos, pmean1, pstd1], axis=1)
 
-            df = pd.concat([cs, ci, c, cm, v], axis=1)
+        
+        # df = pd.concat([cs, ci, c, cm, v], axis=1)
 
-            return df
+        return ind_df
