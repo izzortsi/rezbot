@@ -195,9 +195,7 @@ class ThreadedATrader(threading.Thread):
         klines = klines.append(last_kline_row, ignore_index=True)
         date = klines.date
 
-        df = self.grabber.compute_indicators(
-            klines, **self.strategy.macd_params
-        )
+        df = self.grabber.compute_indicators(klines, **self.strategy.macd_params)
 
         df = pd.concat([klines, df], axis=1)
         return df
