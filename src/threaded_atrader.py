@@ -269,7 +269,7 @@ class ThreadedATrader(threading.Thread):
         )
 
         self.logger.info(
-            f"{tp_or_sl}: Δabs: {self.current_profit}; leveraged Δ%: {self.current_percentual_profit*self.leverage}%; cum_profit: {self.cum_profit}%"
+            f"{tp_or_sl}: abs: {self.current_profit}; leveraged %: {self.current_percentual_profit*self.leverage}%; cum_profit: {self.cum_profit}%"
         )
 
     def _set_actual_profits(self):

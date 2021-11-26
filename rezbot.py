@@ -8,15 +8,16 @@ import argparse
 
 # %%
 parser = argparse.ArgumentParser()
-parser.add_argument("-r", "--rate", default=30, type=int)
-parser.add_argument("-sl", "--stoploss", default=-0.1, type=float)
-parser.add_argument("-tp", "--takeprofit", default=0.26, type=float)
-parser.add_argument("-ew", "--entry_window", default=2, type=int)
-parser.add_argument("-xw", "--exit_window", default=0, type=int)
-parser.add_argument("-L", "--leverage", default=10, type=int)
+parser.add_argument("-r", "--rate", default=1, type=int)
+parser.add_argument("-sl", "--stoploss", default=-0.3, type=float)
+parser.add_argument("-tp", "--takeprofit", default=3, type=float)
+parser.add_argument("-ew", "--entry_window", default=4, type=int)
+parser.add_argument("-xw", "--exit_window", default=2, type=int)
+parser.add_argument("-L", "--leverage", default=3, type=int)
 parser.add_argument("-R", "--is_real", default=False, type=bool)
 parser.add_argument("-Q", "--qty", default=1, type=float)
-parser.add_argument("-S", "--symbol", default="", type=str)
+parser.add_argument("-S", "--symbol", default="ethusdt", type=str)
+parser.add_argument("-tf", "--timeframe", default="15m", type=str)
 args = parser.parse_args()
 
 rate = args.rate
@@ -28,6 +29,7 @@ xw = args.exit_window
 is_real = args.is_real
 qty = args.qty
 symbol = args.symbol
+tf = args.timeframe
 # %%
 
 # from src.grabber import *
@@ -38,13 +40,13 @@ if __name__ == "__main__":
         API_KEY,
         API_SECRET,
         ["ethusdt", "bnbusdt", "btcusdt", "adausdt", "axsusdt", "dotusdt"],
-        "5m",
+        tf,
         rate=rate,
     )
 
     # macd_params = {"fast": 7, "slow": 14, "signal": 5}
 
-    strategy_params = ["macd", "5m", tp, sl, ew, xw]
+    strategy_params = ["macd", tf, tp, sl, ew, xw]
     strat = MacdStrategy(*strategy_params)
 
     # %%
@@ -52,10 +54,10 @@ if __name__ == "__main__":
     symbols = ["ethusdt", "bnbusdt", "btcusdt", "adausdt", "axsusdt", "dotusdt"]
 
     # %%
-    t0 = m.start_trader(strat, symbols[0], leverage=leverage, is_real=is_real, qty=qty)
-    t1 = m.start_trader(strat, symbols[1], leverage=leverage, is_real=is_real, qty=qty)
+    t0 = m.start_trader(strat, symbol, leverage=leverage, is_real=is_real, qty=qty)
+    # t1 = m.start_trader(strat, symbols[1], leverage=leverage, is_real=is_real, qty=qty)
     # t2 = m.start_trader(strat, symbols[2], leverage=leverage, is_real=is_real, qty=qty)
-    t3 = m.start_trader(strat, symbols[3], leverage=leverage, is_real=is_real, qty=qty)
+    # t3 = m.start_trader(strat, symbols[3], leverage=leverage, is_real=is_real, qty=qty)
     # if symbol != "":
     #     t4 = m.start_trader(strat, symbol, leverage=leverage, is_real=is_real, qty=qty)
 # %%

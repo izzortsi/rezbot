@@ -24,7 +24,11 @@ class MacdStrategy:
     def entry_signal(self, trader):
 
         if np.alltrue(trader.data_window.histogram.tail(self.entry_window) < 0):
+            trader.position_type = -1
             return True
+        elif np.alltrue(trader.data_window.histogram.tail(self.entry_window) > 0):
+            trader.position_type = 1
+            return True            
         else:
             return False
 
