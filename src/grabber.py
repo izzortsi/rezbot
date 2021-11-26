@@ -64,6 +64,8 @@ class DataGrabber:
         pmean1.name = f"close_ema{w1}"
         pstd1 = c.ewm(span=w1).std()
         pstd1.name = f"close_std_ema{w1}"
+        local_vol1 = (pstd1/pmean1) * 100
+        local_vol1.name = f"local_vol_ema{w1}"
 
         # cs = ta.vwma(h, v, length=3)
         # cs.rename("csup", inplace=True)
@@ -73,7 +75,7 @@ class DataGrabber:
         # ci.rename("cinf", inplace=True)
 
         # ind_df = pd.concat([cs, cm, ci, macd], axis=1)
-        ind_df = pd.concat([macd, price_pos, pmean1, pstd1], axis=1)
+        ind_df = pd.concat([macd, price_pos, pmean1, pstd1, local_vol1], axis=1)
 
         # df = pd.concat([cs, ci, c, cm, v], axis=1)
 

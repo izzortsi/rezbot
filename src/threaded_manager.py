@@ -126,6 +126,9 @@ class ThreadedManager:
         )
         self.monitor.setDaemon(True)
         self.monitor.start()
+    
+    def sm(self, sleep=5):
+        self.start_monitoring(sleep)
 
     def stop_monitoring(self):
         self.is_monitoring = False

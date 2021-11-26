@@ -111,8 +111,8 @@ class ThreadedATrader(threading.Thread):
         self.opening_order = None
         self.closing_order = None
         self.tp_order = None
-        self.current_profit = None
-        self.current_percentual_profit = None
+        self.current_profit = 0
+        self.current_percentual_profit = 0
         # self.uptime = None
 
         strf_init_time = strf_epoch(self.init_time, fmt="%H-%M-%S")
@@ -138,7 +138,7 @@ class ThreadedATrader(threading.Thread):
                 self._really_act_on_signal_limit()
             else:
                 self._test_act_on_signal()
-            # self._drop_trades_to_csv()
+            self._drop_trades_to_csv()
 
     def stop(self):
         self.keep_running = False
@@ -274,28 +274,6 @@ class ThreadedATrader(threading.Thread):
                 self.current_profit / self.last_price
             ) * 100
 
-    def _register_trade_data(self, tp_or_sl):
-
-        self.cum_profit += self.current_percentual_profit * self.leverage
-        self.confirmatory_data.append(
-            {
-                "TP/SL": f"{tp_or_sl}",
-                "type": f"{'LONG' if self.position_type == 1 else 'SHORT'}",
-                "entry_time": self.entry_time,
-                "entry_price": self.entry_price,
-                "exit_time": self.exit_time,
-                "exit_price": self.exit_price,
-                "percentual_difference": self.current_percentual_profit,
-                "leveraged percentual_difference": self.current_percentual_profit
-                * self.leverage,
-                "cumulative_profit": self.cum_profit,
-            }
-        )
-
-        self.logger.info(
-            f"{tp_or_sl}: Δabs: {self.current_profit}; leveraged Δ%: {self.current_percentual_profit*self.leverage}%; cum_profit: {self.cum_profit}%"
-        )
-
     def _set_actual_profits(self):
 
         self.current_profit = self.position_type * (
@@ -328,6 +306,7 @@ class ThreadedATrader(threading.Thread):
                     self._change_position()
                     self.entry_price = None
                     self.exit_price = None
+                    self.position_type = None
                 except BinanceAPIException as error:
                     self.logger.info(f"sl order, {error}")
 
@@ -347,6 +326,7 @@ class ThreadedATrader(threading.Thread):
                     self._change_position()
                     self.entry_price = None
                     self.exit_price = None
+                    self.position_type = None
 
     def send_orders(self, protect=False):
 
@@ -415,3 +395,25 @@ class ThreadedATrader(threading.Thread):
         if self.closing_order["status"] == "FILLED":
             self.exit_price = float(self.closing_order["avgPrice"])
             self.exit_time = to_datetime_tz(self.closing_order["updateTime"], unit="ms")
+
+    def _register_trade_data(self, tp_or_sl):
+
+        self.cum_profit += self.current_percentual_profit * self.leverage
+        self.confirmatory_data.append(
+            {
+                "TP/SL": f"{tp_or_sl}",
+                "type": f"{'LONG' if self.position_type == 1 else 'SHORT'}",
+                "entry_time": self.entry_time,
+                "entry_price": self.entry_price,
+                "exit_time": self.exit_time,
+                "exit_price": self.exit_price,
+                "percentual_difference": self.current_percentual_profit,
+                "leveraged percentual_difference": self.current_percentual_profit
+                * self.leverage,
+                "cumulative_profit": self.cum_profit,
+            }
+        )
+
+        self.logger.info(
+            f"{tp_or_sl}: Δabs: {self.current_profit}; leveraged Δ%: {self.current_percentual_profit*self.leverage}%; cum_profit: {self.cum_profit}%"
+        )
