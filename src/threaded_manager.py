@@ -10,15 +10,17 @@
 #
 # %%
 
+
 from src import *
 from src.threaded_atrader import ThreadedATrader
-from src.tradingview_handlers import Analyst
+from src.tradingview_handlers import ThreadedTAHandler
 import threading
 import time
+import asyncio
 
 
 class ThreadedManager:
-    def __init__(self, api_key, api_secret, symbols, tframe, rate=1):
+    def __init__(self, api_key, api_secret, rate=1):
 
         self.client = Client(
             api_key=api_key, api_secret=api_secret, exchange="binance.com-futures"
@@ -26,22 +28,22 @@ class ThreadedManager:
         self.bwsm = BinanceWebSocketApiManager(
             output_default="UnicornFy", exchange="binance.com-futures"
         )
-        self.symbols = [s.upper() for s in symbols]
-        self.rate = rate  # debbug purposes. will be removed
-        self.tframe = tframe
 
-        self.qty = {symbol: None for symbol in self.symbols}
-        self.price_formatter = {symbol: None for symbol in self.symbols}
+        self.rate = rate  # debbug purposes. will be removed
+
         self.traders = {}
+        self.ta_handlers = {}
 
         self.is_monitoring = False
 
-
-    def start_trader(self, strategy, symbol, leverage=1, is_real=False, qty=1):
+    def start_trader(self, strategy, symbol, leverage=1, is_real=False, qty=0.002):
 
         trader_name = name_trader(strategy, symbol)
 
         if trader_name not in self.get_traders():
+
+            handler = ThreadedTAHandler(symbol, ["1m"], self.rate)
+            self.ta_handlers[trader_name] = handler
 
             trader = ThreadedATrader(
                 self, trader_name, strategy, symbol, leverage, is_real, qty
@@ -56,6 +58,8 @@ class ThreadedManager:
     def get_traders(self):
         return list(self.traders.items())
 
+    def get_ta_handlers(self):
+        return list(self.ta_handlers.items())
 
     def close_traders(self, traders=None):
         """
@@ -65,6 +69,9 @@ class ThreadedManager:
             # fecha todos os traders
             for name, trader in self.get_traders():
                 trader.stop()
+            for name, handler in self.get_ta_handlers():
+                handler.stop()
+                del self.ta_handlers[name]
 
         else:
             # fecha só os passados como argumento
@@ -91,8 +98,8 @@ class ThreadedManager:
             position type: {trader.position_type}
             entry price: {trader.entry_price}
             last price: {trader.last_price}
+            TV signals: {[s["RECOMMENDATION"] for s in self.ta_handlers[name].summary]}, {self.ta_handlers[name].signal}
             current percentual profit (unleveraged): {trader.current_percentual_profit}
-            current absolute profit (unleveraged): {trader.current_profit}
             cummulative leveraged profit: {trader.cum_profit}
                     """
             )
@@ -120,6 +127,9 @@ class ThreadedManager:
         )
         self.monitor.setDaemon(True)
         self.monitor.start()
+    
+    def sm(self, sleep=5):
+        self.start_monitoring(sleep)
 
     def stop_monitoring(self):
         self.is_monitoring = False
