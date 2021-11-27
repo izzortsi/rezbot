@@ -15,6 +15,7 @@ from src.threaded_atrader import ThreadedATrader
 from src.tradingview_handlers import ThreadedTAHandler
 import threading
 import time
+import asyncio
 
 
 class ThreadedManager:
@@ -98,7 +99,6 @@ class ThreadedManager:
             last price: {trader.last_price}
             TV signals: {[s["RECOMMENDATION"] for s in self.ta_handlers[name].summary]}, {self.ta_handlers[name].signal}
             current percentual profit (unleveraged): {trader.current_percentual_profit}
-            current absolute profit (unleveraged): {trader.current_profit}
             cummulative leveraged profit: {trader.cum_profit}
                     """
             )

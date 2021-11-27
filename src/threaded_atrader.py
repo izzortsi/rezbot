@@ -102,17 +102,17 @@ class ThreadedATrader(threading.Thread):
         self.is_positioned = False
         self.position = None
         self.position_type = None
-        self.entry_price = None
+        self.entry_price = 0.0
         self.entry_time = None
-        self.exit_price = None
+        self.exit_price = 0.0
         self.exit_time = None
-        self.last_price = None
+        self.last_price = 0.0
         self.now_time = None
         self.opening_order = None
         self.closing_order = None
         self.tp_order = None
-        self.current_profit = 0
-        self.current_percentual_profit = 0
+        self.current_profit = 0.0
+        self.current_percentual_profit = 0.0
         # self.uptime = None
 
         strf_init_time = strf_epoch(self.init_time, fmt="%H-%M-%S")
@@ -356,9 +356,11 @@ class ThreadedATrader(threading.Thread):
             )[-1]
             print(self.position)
             self.entry_price = float(self.position["entryPrice"])
+            print(self.entry_price)
             self.entry_time = to_datetime_tz(self.position["updateTime"], unit="ms")
             # self.qty = self.position[0]["positionAmt"]
             self.tp_price = compute_exit(self.entry_price, self.take_profit, side=side)
+            print(self.tp_price)
             self.logger.info(
                 f"ENTRY: E:{self.entry_price} at t:{self.entry_time}; signal: {self.ta_handler.signal}; type: {self.position_type}"
             )
