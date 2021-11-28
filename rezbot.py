@@ -3,21 +3,22 @@
 from src import *
 from src.threaded_manager import ThreadedManager
 from src.threaded_atrader import ThreadedATrader
-from src.strategy import MacdStrategy
+from src.strategy import * #MacdStrategy, TrendReversalStrategy
 import argparse
 
 # %%
 parser = argparse.ArgumentParser()
 parser.add_argument("-r", "--rate", default=1, type=int)
-parser.add_argument("-sl", "--stoploss", default=-0.3, type=float)
-parser.add_argument("-tp", "--takeprofit", default=3, type=float)
+parser.add_argument("-sl", "--stoploss", default=-0.21, type=float)
+parser.add_argument("-tp", "--takeprofit", default=0.28, type=float)
 parser.add_argument("-ew", "--entry_window", default=4, type=int)
-parser.add_argument("-xw", "--exit_window", default=2, type=int)
-parser.add_argument("-L", "--leverage", default=3, type=int)
+parser.add_argument("-xw", "--exit_window", default=0, type=int)
+parser.add_argument("-L", "--leverage", default=10, type=int)
 parser.add_argument("-R", "--is_real", default=False, type=bool)
 parser.add_argument("-Q", "--qty", default=1, type=float)
-parser.add_argument("-S", "--symbol", default="ethusdt", type=str)
-parser.add_argument("-tf", "--timeframe", default="15m", type=str)
+parser.add_argument("-S", "--symbol", default="bnbusdt", type=str)
+parser.add_argument("-tf", "--timeframe", default="1m", type=str)
+parser.add_argument("-s", "--strategy", default=1, type=int)
 args = parser.parse_args()
 
 rate = args.rate
@@ -30,6 +31,7 @@ is_real = args.is_real
 qty = args.qty
 symbol = args.symbol
 tf = args.timeframe
+strategy = args.strategy
 # %%
 
 # from src.grabber import *
@@ -39,16 +41,20 @@ if __name__ == "__main__":
     m = ThreadedManager(
         API_KEY,
         API_SECRET,
-        ["ethusdt", "bnbusdt", "btcusdt", "adausdt", "axsusdt", "dotusdt"],
-        tf,
+        tf=tf,
         rate=rate,
     )
 
     # macd_params = {"fast": 7, "slow": 14, "signal": 5}
-
-    strategy_params = ["macd", tf, tp, sl, ew, xw]
-    strat = MacdStrategy(*strategy_params)
-
+    if strategy == 1:
+        strategy_params = ["trend_reversal", tf, tp, sl, ew, xw]
+        strat = TrendReversalStrategy(*strategy_params)
+    elif strategy == 2:
+        strategy_params = ["tv_signals", tf, tp, sl, ew, xw]
+        strat = TAStrategy(*strategy_params)        
+    elif strategy == 3:
+        strategy_params = ["macd_tv", tf, tp, sl, ew, xw]
+        strat = MacdTAStrategy(*strategy_params)
     # %%
 
     symbols = ["ethusdt", "bnbusdt", "btcusdt", "adausdt", "axsusdt", "dotusdt"]

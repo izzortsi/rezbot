@@ -20,7 +20,7 @@ import asyncio
 
 
 class ThreadedManager:
-    def __init__(self, api_key, api_secret, rate=1):
+    def __init__(self, api_key, api_secret, rate=1, tf="5m"):
 
         self.client = Client(
             api_key=api_key, api_secret=api_secret, exchange="binance.com-futures"
@@ -30,7 +30,7 @@ class ThreadedManager:
         )
 
         self.rate = rate  # debbug purposes. will be removed
-
+        self.tf = tf
         self.traders = {}
         self.ta_handlers = {}
 
@@ -42,14 +42,15 @@ class ThreadedManager:
 
         if trader_name not in self.get_traders():
 
-            handler = ThreadedTAHandler(symbol, ["1m"], self.rate)
+            handler = ThreadedTAHandler(symbol, [self.tf], self.rate)
             self.ta_handlers[trader_name] = handler
 
             trader = ThreadedATrader(
                 self, trader_name, strategy, symbol, leverage, is_real, qty
             )
             self.traders[trader.name] = trader
-
+            trader.ta_handler = handler
+            
             return trader
         else:
             print("Redundant trader. No new thread was created.\n")
