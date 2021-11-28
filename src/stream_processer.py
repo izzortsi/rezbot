@@ -46,7 +46,7 @@ class StreamProcesser(threading.Thread):
                 last_index = self.trader.data_window.index[-1]
 
                 self.trader.now = time.time()
-                self.trader.now_time = to_datetime_tz(self.trader.now)
+                self.trader.now_time = pd.to_datetime(self.trader.now)
                 self.trader.last_price = c
 
                 dohlcv = pd.DataFrame(
