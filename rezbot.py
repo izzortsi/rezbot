@@ -9,15 +9,15 @@ import argparse
 # %%
 parser = argparse.ArgumentParser()
 parser.add_argument("-r", "--rate", default=1, type=int)
-parser.add_argument("-sl", "--stoploss", default=-0.21, type=float)
-parser.add_argument("-tp", "--takeprofit", default=0.28, type=float)
-parser.add_argument("-ew", "--entry_window", default=4, type=int)
+parser.add_argument("-sl", "--stoploss", default=-0.1, type=float)
+parser.add_argument("-tp", "--takeprofit", default=6, type=float)
+parser.add_argument("-ew", "--entry_window", default=1, type=int)
 parser.add_argument("-xw", "--exit_window", default=0, type=int)
-parser.add_argument("-L", "--leverage", default=10, type=int)
+parser.add_argument("-L", "--leverage", default=1, type=int)
 parser.add_argument("-R", "--is_real", default=False, type=bool)
 parser.add_argument("-Q", "--qty", default=1, type=float)
-parser.add_argument("-S", "--symbol", default="bnbusdt", type=str)
-parser.add_argument("-tf", "--timeframe", default="1m", type=str)
+parser.add_argument("-S", "--symbol", default="sandusdt", type=str)
+parser.add_argument("-tf", "--timeframe", default="30m", type=str)
 parser.add_argument("-s", "--strategy", default=1, type=int)
 args = parser.parse_args()
 
@@ -47,8 +47,8 @@ if __name__ == "__main__":
 
     # macd_params = {"fast": 7, "slow": 14, "signal": 5}
     if strategy == 1:
-        strategy_params = ["trend_reversal", tf, tp, sl, ew, xw]
-        strat = TrendReversalStrategy(*strategy_params)
+        strategy_params = ["pullback", tf, tp, sl, ew, xw]
+        strat = PullbackStrategy(*strategy_params)
     elif strategy == 2:
         strategy_params = ["tv_signals", tf, tp, sl, ew, xw]
         strat = TAStrategy(*strategy_params)        

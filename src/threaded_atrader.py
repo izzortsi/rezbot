@@ -173,7 +173,7 @@ class ThreadedATrader(threading.Thread):
             klines.close, is_macd=True, **self.strategy.macd_params
         )
 
-        df = pd.concat([date, df], axis=1)
+        df = pd.concat([date, klines, df], axis=1)
         return df
 
     def _start_new_stream(self):

@@ -56,13 +56,13 @@ class StreamProcesser:
                 new_close = dohlcv.close
                 self.trader.data_window.close.update(new_close)
 
-                macd = self.trader.grabber.compute_indicators(
+                indicators = self.trader.grabber.compute_indicators(
                     self.trader.data_window.close, **self.trader.strategy.macd_params
                 )
 
                 date = dohlcv.date
                 new_row = pd.concat(
-                    [date, macd.tail(1)],
+                    [date, indicators.tail(1)],
                     axis=1,
                 )
 
