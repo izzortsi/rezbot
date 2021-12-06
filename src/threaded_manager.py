@@ -17,7 +17,8 @@ from src.tradingview_handlers import ThreadedTAHandler
 import threading
 import time
 import asyncio
-
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 class ThreadedManager:
     def __init__(self, api_key, api_secret, rate=1, tf="5m"):
@@ -140,3 +141,63 @@ class ThreadedManager:
 
     def stop_monitoring(self):
         self.is_monitoring = False
+
+    def plot_dw(self, trader):
+        data = trader.data_window
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        ax.plot(data.close)
+        ax.plot(data.close_ema)
+        ax.plot(data.cs, "g--")
+        ax.plot(data.ci, "r--")
+        def animate(i, trader):
+            data = trader.data_window
+            ax.cla()
+            ax.plot(data.close)
+            ax.plot(data.close_ema)
+            ax.plot(data.cs, "g--")
+            ax.plot(data.ci, "r--")
+# 
+        ani = animation.FuncAnimation(fig, animate, fargs=(trader, ), interval=1000)
+        plt.show()
+
+    # def plot_dw(self, trader):
+    #     data = trader.data_window
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(1, 1, 1)
+    #     ax.plot(data.close)
+    #     ax.plot(data.close_ema)
+    #     ax.plot(data.cs, "g--")
+    #     ax.plot(data.ci, "r--")
+    #     plt.show()
+# import unicorn_binance_websocket_api.unicorn_binance_websocket_api_manager as ubwam
+# import datetime as dt
+
+
+# import matplotlib.animation as animation
+
+# binance_websocket_api_manager = ubwam.BinanceWebSocketApiManager()
+# binance_websocket_api_manager.create_stream("trade", "btcusdt", output="UnicornFy")
+
+# xs = []
+# ys = []
+# title = "Live BTC Price @ Binance.com"
+# fig = plt.figure()
+# fig.canvas.set_window_title(title)
+# ax = fig.add_subplot(1, 1, 1)
+
+# print("Please wait a few seconds until enough data has been received!")
+
+
+
+
+
+
+
+
+
+
+
+
+
+

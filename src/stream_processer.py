@@ -95,7 +95,7 @@ class StreamProcesser:
 
                     self.trader.running_candles.append(dohlcv)
                     self.trader.init_time = time.time()
-
+                    
                 else:
                     self.trader.data_window.update(new_row)
 

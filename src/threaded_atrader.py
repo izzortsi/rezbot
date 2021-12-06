@@ -111,6 +111,11 @@ class ThreadedATrader(threading.Thread):
 
         while self.keep_running:
             self.stream_processer._process_stream_data()
+            try:
+                # print(self.manager.client.ping())
+                self.manager.client.ping()
+            except BinanceAPIException as error:
+                self.logger.info(f"pinging, {error}")
             if self.is_real:
                 self._really_act_on_signal_limit()
             else:
