@@ -7,7 +7,7 @@ from src.symbols_formats import FORMATS
 
 
 class ThreadedATrader(threading.Thread):
-    def __init__(self, manager, name, strategy, symbol, leverage, is_real, qty):
+    def __init__(self, manager, name, strategy, symbol, leverage, is_real, qty, w1=5, m1 = 1.2):
 
         threading.Thread.__init__(self)
 
@@ -21,6 +21,9 @@ class ThreadedATrader(threading.Thread):
         self.symbol = symbol
         self.leverage = leverage
         self.is_real = is_real
+
+        self.w1 = w1
+        self.m1 = m1
 
         if self.is_real:
             if self.symbol.upper() in FORMATS.keys():
@@ -161,19 +164,19 @@ class ThreadedATrader(threading.Thread):
         klines = self.grabber.get_data(
             symbol=self.symbol,
             tframe=self.strategy.timeframe,
-            limit=2 * self.macd_params["slow"],
+            limit=2 * self.macd_params["slow"]+1,
         )
-        last_kline_row = self.grabber.get_data(
-            symbol=self.symbol, tframe=self.strategy.timeframe, limit=1
-        )
-        klines = klines.append(last_kline_row, ignore_index=True)
+        # last_kline_row = self.grabber.get_data(
+        #     symbol=self.symbol, tframe=self.strategy.timeframe, limit=1
+        # )
+        # klines = klines.append(last_kline_row, ignore_index=True)
         date = klines.date
 
         df = self.grabber.compute_indicators(
-            klines.close, is_macd=True, **self.strategy.macd_params
+            klines.close, w1 = self.w1, m1 = self.m1, **self.strategy.macd_params
         )
 
-        df = pd.concat([date, klines, df], axis=1)
+        df = pd.concat([date, df], axis=1)
         return df
 
     def _start_new_stream(self):

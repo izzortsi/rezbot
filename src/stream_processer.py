@@ -1,7 +1,7 @@
 from src import *
 import threading
 import time
-
+import pandas_ta as ta
 
 class StreamProcesser:
     def __init__(self, trader):
@@ -32,7 +32,7 @@ class StreamProcesser:
                 h = float(kline["high_price"])
                 l = float(kline["low_price"])
                 c = float(kline["close_price"])
-                # v = float(kline["base_volume"])
+                v = float(kline["base_volume"])
                 #
                 # num_trades = int(kline["number_of_trades"])
                 # is_closed = bool(kline["is_closed"])
@@ -44,8 +44,8 @@ class StreamProcesser:
                 self.trader.last_price = c
 
                 dohlcv = pd.DataFrame(
-                    np.atleast_2d(np.array([self.trader.now_time, o, h, l, c])),
-                    columns=["date", "open", "high", "low", "close"],
+                    np.atleast_2d(np.array([self.trader.now_time, o, h, l, c, v])),
+                    columns=["date", "open", "high", "low", "close", "volume"],
                     index=[last_index],
                 )
 
@@ -56,19 +56,36 @@ class StreamProcesser:
                 new_close = dohlcv.close
                 self.trader.data_window.close.update(new_close)
 
-                indicators = self.trader.grabber.compute_indicators(
-                    self.trader.data_window.close, **self.trader.strategy.macd_params
-                )
-
+                # indicators = self.trader.grabber.compute_indicators(
+                #     self.trader.data_window.close, **self.trader.strategy.macd_params
+                # )
+                macd = ta.macd(self.trader.data_window.close)
+                # macd = ta.macd(self.trader.data_window.close, **self.trader.strategy.macd_params)
+                # print(self.trader.strategy.macd_params)
+                hist = macd["MACDh_12_26_9"]
+                hist.name = "histogram"
+                c = self.trader.data_window.close
+                close_ema = c.ewm(span=self.trader.w1).mean()
+                close_ema.name = "close_ema"
+                close_std = c.ewm(span=self.trader.w1).std()
+                close_std.name = "close_std"
+                cs = close_ema + self.trader.m1*close_std
+                cs.name = "cs"
+                ci = close_ema - self.trader.m1*close_std
+                ci.name = "ci"
+                hist_ema = hist.ewm(span=self.trader.w1).mean()
+                hist_ema.name = "hist_ema"
+                indicators = pd.concat([c, cs, close_ema, ci, close_std, hist, hist_ema], axis=1)
                 date = dohlcv.date
+
                 new_row = pd.concat(
                     [date, indicators.tail(1)],
                     axis=1,
                 )
 
                 if (
-                    int(self.trader.now - self.trader.init_time)
-                    >= tf_as_seconds / self.trader.manager.rate
+                    (self.trader.data_window.date.values[-1] - self.trader.data_window.date.values[-2])
+                    >= pd.Timedelta(f"{tf_as_seconds / self.trader.manager.rate} seconds")
                 ):
 
                     self.trader.data_window.drop(index=[0], axis=0, inplace=True)

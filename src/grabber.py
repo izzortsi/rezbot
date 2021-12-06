@@ -37,28 +37,29 @@ class DataGrabber:
         DOHLCV.columns = ["date", "open", "high", "low", "close", "volume"]
         return DOHLCV
 
-    def compute_indicators(self, ohlcv, w1=5, m1=1.2, indicators=[], **macd_params):
+    def compute_indicators(self, ohlcv, w1=5, m1=1.2, **macd_params):
 
         c = ohlcv
-        h = ohlcv["high"]
-        l = ohlcv["low"]
-        v = ohlcv["volume"]
+        # h = ohlcv["high"]
+        # l = ohlcv["low"]
+        # v = ohlcv["volume"]
 
 
         values = [str(value) for value in list(macd_params.values())]
         macd = ta.macd(c, **macd_params)
-        lengths = "_".join(values)
-        macd.rename(
-            columns={
-                f"MACD_{lengths}": "macd",
-                f"MACDh_{lengths}": "histogram",
-                f"MACDs_{lengths}": "signal",
-            },
-            inplace=True,
-        )
+        # lengths = "_".join(values)
+        # macd.rename(
+        #     columns={
+        #         f"MACD_{lengths}": "macd",
+        #         f"MACDh_{lengths}": "histogram",
+        #         f"MACDs_{lengths}": "signal",
+        #     },
+        #     inplace=True,
+        # )
         
-        
-        
+        print(macd)
+        hist = macd["MACDh_12_26_9"]
+        hist.name = "histogram"
 
 
         close_ema = c.ewm(span=w1).mean()
@@ -69,9 +70,8 @@ class DataGrabber:
         cs.name = "cs"
         ci = close_ema - m1*close_std
         ci.name = "ci"
-        hist_ema = macd.histogram.ewm(span=w1).mean()
+        hist_ema = hist.ewm(span=w1).mean()
         hist_ema.name = "hist_ema"
-        hist = macd.histogram
         # cs = ta.vwma(h, v, length=3)
         # cs.rename("csup", inplace=True)
         # cm = ta.vwma(c, v, length=3)

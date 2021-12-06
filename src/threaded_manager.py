@@ -36,7 +36,7 @@ class ThreadedManager:
 
         self.is_monitoring = False
 
-    def start_trader(self, strategy, symbol, leverage=1, is_real=False, qty=0.002):
+    def start_trader(self, strategy, symbol, leverage=1, is_real=False, qty=0.002, w1=5, m1=1.2):
 
         trader_name = name_trader(strategy, symbol)
 
@@ -46,7 +46,7 @@ class ThreadedManager:
             self.ta_handlers[trader_name] = handler
 
             trader = ThreadedATrader(
-                self, trader_name, strategy, symbol, leverage, is_real, qty
+                self, trader_name, strategy, symbol, leverage, is_real, qty, w1=w1, m1=m1,
             )
             self.traders[trader.name] = trader
             trader.ta_handler = handler
@@ -94,6 +94,7 @@ class ThreadedManager:
             print(
                 f"""
             trader: {trader.name}
+            avg volatility: {(trader.data_window.close_std/trader.data_window.close_ema).mean()*100}%
             number of trades: {trader.num_trades}
             is positioned? {trader.is_positioned}
             position type: {trader.position_type}
@@ -102,6 +103,8 @@ class ThreadedManager:
             TV signals: {[s["RECOMMENDATION"] for s in self.ta_handlers[name].summary]}, {self.ta_handlers[name].signal}
             current percentual profit (unleveraged): {trader.current_percentual_profit}
             cummulative leveraged profit: {trader.cum_profit}
+            
+            {trader.data_window.tail(3)}
                     """
             )
 
@@ -130,7 +133,10 @@ class ThreadedManager:
         self.monitor.start()
     
     def sm(self, sleep=5):
-        self.start_monitoring(sleep)
+        if self.is_monitoring:
+            self.stop_monitoring()
+        else:
+            self.start_monitoring(sleep)
 
     def stop_monitoring(self):
         self.is_monitoring = False

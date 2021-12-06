@@ -76,7 +76,7 @@ def to_percentual(exit_price, entry_price, leverage=1):
 
 def to_datetime_tz(arg, timedelta=-pd.Timedelta("03:00:00"), unit="s", **kwargs):
     """
-    to_datetime_tz(arg, timedelta=-pd.Timedelta("03:00:00"), unit="s", **kwargs)
+    to_datetime_tz(arg, timedelta=-pd.Timedelta("00:00:00"), unit="s", **kwargs)
 
     Args:
         arg (float): epochtime
