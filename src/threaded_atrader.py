@@ -111,6 +111,10 @@ class ThreadedATrader(threading.Thread):
 
         while self.keep_running:
             self.stream_processer._process_stream_data()
+            # if (
+            #     (self.data_window.date.values[-1] - self.data_window.date.values[-2])
+            #         >= pd.Timedelta("20 seconds")
+            #     ):
             try:
                 # print(self.manager.client.ping())
                 self.manager.client.ping()

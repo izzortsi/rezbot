@@ -143,22 +143,41 @@ class ThreadedManager:
         self.is_monitoring = False
 
     def plot_dw(self, trader):
+
         data = trader.data_window
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
-        ax.plot(data.close)
-        ax.plot(data.close_ema)
-        ax.plot(data.cs, "g--")
-        ax.plot(data.ci, "r--")
+        close_line, = ax.plot(data.close)
+        close_ema_line, = ax.plot(data.close_ema)
+        cs_line, = ax.plot(data.cs, "g--")
+        ci_line, = ax.plot(data.ci, "r--")
+
+        
+
         def animate(i, trader):
+                
             data = trader.data_window
-            ax.cla()
-            ax.plot(data.close)
-            ax.plot(data.close_ema)
-            ax.plot(data.cs, "g--")
-            ax.plot(data.ci, "r--")
+            close_line.set_ydata(data.close)
+            close_ema_line.set_ydata(data.close_ema)
+            cs_line.set_ydata(data.cs)
+            ci_line.set_ydata(data.ci)
+            return close_line, close_ema_line, cs_line, ci_line,
+            # tf_as_seconds = interval_to_milliseconds(self.trader.strategy.timeframe) * 0.001
+            # if (
+            #     (trader.data_window.date.values[-1] - trader.data_window.date.values[-2])
+            #         >= pd.Timedelta(f"{tf_as_seconds / trader.manager.rate} seconds")
+            #     ):
+            #         data = trader.data_window
+            #         ax.cla()
+            #         ax.plot(data.close)
+            #         ax.plot(data.close_ema)
+            #         ax.plot(data.cs, "g--")
+            #         ax.plot(data.ci, "r--")
+            # else:
+                
+
 # 
-        ani = animation.FuncAnimation(fig, animate, fargs=(trader, ), interval=1000)
+        ani = animation.FuncAnimation(fig, animate, fargs=(trader, ), interval=100, blit=True)
         plt.show()
 
     # def plot_dw(self, trader):
