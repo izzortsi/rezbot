@@ -29,12 +29,17 @@ API_SECRET = os.environ.get("API_SECRET")
 # AUXILIARY FUNCTIONS
 
 
-def futures_mark_price_klines(self, **params):
-    """Kline/candlestick bars for a symbol. Klines are uniquely identified by their open time.
-    https://binance-docs.github.io/apidocs/futures/en/#kline-candlestick-data-market_data
-    """
-    return self._request_futures_api("get", "markPriceKlines", data=params)
+# def futures_mark_price_klines(self, **params):
+#     """Kline/candlestick bars for a symbol. Klines are uniquely identified by their open time.
+#     https://binance-docs.github.io/apidocs/futures/en/#kline-candlestick-data-market_data
+#     """
+#     return self._request_futures_api("get", "markPriceKlines", data=params)
 
+# def futures_continuous_klines(self, **params):
+#     """Kline/candlestick bars for a symbol. Klines are uniquely identified by their open time.
+#     https://binance-docs.github.io/apidocs/futures/en/#kline-candlestick-data-market_data
+#     """
+#     return self._request_futures_api("get", "continuousKlines ", data=params)
 
 def futures_place_batch_order(self, **params):
     """Send in new orders.
@@ -48,7 +53,8 @@ def futures_place_batch_order(self, **params):
     return self._request_futures_api("post", "batchOrders", True, data=params)
 
 
-Client.futures_mark_price_klines = futures_mark_price_klines
+# Client.futures_mark_price_klines = futures_mark_price_klines
+# Client.futures_continuous_klines = futures_continuous_klines
 Client.futures_place_batch_order = futures_place_batch_order
 
 

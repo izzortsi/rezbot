@@ -20,6 +20,7 @@ class Manager:
         self.client = Client(
             api_key=api_key,
             api_secret=api_secret,
+            exchange="binance.com-futures",
         )
         self.bwsm = BinanceWebSocketApiManager(
             output_default="UnicornFy", exchange="binance.com-futures"

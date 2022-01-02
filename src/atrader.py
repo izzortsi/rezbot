@@ -168,7 +168,7 @@ class ATrader:
             klines.close, is_macd=True, **self.strategy.macd_params
         )
 
-        df = pd.concat([date, df], axis=1)
+        df = pd.concat([klines, df], axis=1)
         return df
 
     def _start_new_stream(self):
@@ -217,7 +217,7 @@ class ATrader:
                         h = float(kline["high_price"])
                         l = float(kline["low_price"])
                         c = float(kline["close_price"])
-                        # v = float(kline["base_volume"])
+                        v = float(kline["base_volume"])
                         #
                         # num_trades = int(kline["number_of_trades"])
                         # is_closed = bool(kline["is_closed"])
@@ -229,13 +229,14 @@ class ATrader:
                         self.last_price = c
 
                         dohlcv = pd.DataFrame(
-                            np.atleast_2d(np.array([self.now_time, o, h, l, c])),
+                            np.atleast_2d(np.array([self.now_time, o, h, l, c, v])),
                             columns=[
                                 "date",
                                 "open",
                                 "high",
                                 "low",
                                 "close",
+                                "volume",
                             ],
                             index=[last_index],
                         )
@@ -251,9 +252,8 @@ class ATrader:
                             self.data_window.close, **self.strategy.macd_params
                         )
 
-                        date = dohlcv.date
                         new_row = pd.concat(
-                            [date, macd.tail(1)],
+                            [dohlcv.tail(1), macd.tail(1)],
                             axis=1,
                         )
 

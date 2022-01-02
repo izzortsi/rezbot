@@ -4,8 +4,8 @@
 # )
 from src import *
 
-# import pandas as pd
-# import pandas_ta as ta
+import pandas as pd
+import pandas_ta as ta
 
 # %%
 
@@ -17,12 +17,20 @@ class DataGrabber:
     def get_data(
         self, symbol="BTCUSDT", tframe="1h", limit=None, startTime=None, endTime=None
     ):
-        klines = self.client.futures_mark_price_klines(
+        klines = self.client.futures_klines(
             symbol=symbol,
             interval=tframe,
             startTime=startTime,
             endTime=endTime,
             limit=limit,
+        )
+        return self.trim_data(klines)
+
+    def get_historical_data(
+        self, symbol="BTCUSDT", tframe="1h", limit=500, startTime=None, endTime=None
+    ):
+        klines = self.client.get_historical_klines(
+            symbol, tframe, startTime, end_str=endTime, limit=limit
         )
         return self.trim_data(klines)
 

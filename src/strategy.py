@@ -1,5 +1,7 @@
 import numpy as np
 import time
+from auxiliary_functions import *
+from sklearn.preprocessing import StandardScaler
 
 
 class Strategy1:
@@ -24,7 +26,13 @@ class Strategy1:
     def entry_signal(self, trader, data_window):
 
         if np.alltrue(data_window.histogram.tail(self.entry_window) < 0):
-            return True
+            F = force(data_window, length=7)
+            std_scaler = StandardScaler()
+            F_scaled = std_scaler.fit_transform(
+                np.array(F.EMA_FORCE_9.array).reshape(-1, 1)
+            )
+            if np.alltrue(F_scaled.tail(self.entry_window) > 0):
+                return True
         else:
             return False
 
@@ -64,6 +72,7 @@ class Strategy2:
     def entry_signal(self, trader, data_window):
 
         if np.alltrue(data_window.histogram.tail(self.entry_window) >= 0):
+
             return True
         else:
             return False
