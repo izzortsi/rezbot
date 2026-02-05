@@ -122,7 +122,7 @@ class AsyncWebSocketBridge:
         """
         async def _subscribe():
             try:
-                stream = await self._connection.klines_stream(symbol=symbol, interval=interval)
+                stream = await self._connection.kline_candlestick_streams(symbol=symbol, interval=interval)
 
                 # Create thread-safe queue for this stream
                 with self._lock:
@@ -138,12 +138,8 @@ class AsyncWebSocketBridge:
                             except Exception as e:
                                 logger.error(f"Error converting kline data: {e}")
 
-                def on_error(error):
-                    logger.error(f"WebSocket error for {stream_name}: {error}")
-
-                # Register handlers
+                # Register message handler (error event is not supported by this SDK)
                 stream.on("message", on_message)
-                stream.on("error", on_error)
 
                 # Store stream reference
                 with self._lock:

@@ -123,14 +123,34 @@ class BinanceRestClient:
             logger.error(f"Unexpected error: {e}")
         raise
 
+    def _unwrap_data(self, data) -> Any:
+        """Unwrap SDK response data.
+
+        The SDK wraps responses in objects with an 'actual_instance' attribute.
+        This method extracts the actual data for easier access.
+        """
+        # If data has actual_instance attribute, unwrap it
+        if hasattr(data, 'actual_instance') and data.actual_instance is not None:
+            actual = data.actual_instance
+            # If actual_instance is a dict, return it as is
+            if isinstance(actual, dict):
+                return actual
+            # Otherwise return the actual instance object
+            return actual
+        # For lists, try to unwrap each element
+        elif isinstance(data, list):
+            return [self._unwrap_data(item) for item in data]
+        return data
+
     def futures_change_leverage(self, symbol: str, leverage: int) -> Dict[str, Any]:
         """Set leverage for a symbol."""
         try:
-            response = self._client.rest_api.change_leverage(symbol=symbol, leverage=leverage)
+            response = self._client.rest_api.change_initial_leverage(symbol=symbol, leverage=leverage)
+            data = self._unwrap_data(response.data())
             return {
                 "symbol": symbol,
                 "leverage": leverage,
-                "maxNotionalValue": str(getattr(response.data, 'max_notional_value_value', 'NA')),
+                "maxNotionalValue": str(getattr(data, 'max_notional_value', 'NA')),
             }
         except Exception as e:
             self._handle_error(e)
@@ -141,16 +161,17 @@ class BinanceRestClient:
             # Map parameter names from camelCase to snake_case
             mapped_params = self._map_order_params(params)
             response = self._client.rest_api.new_order(**mapped_params)
+            data = self._unwrap_data(response.data())
 
             return {
-                "orderId": str(response.data.order_id),
-                "symbol": response.data.symbol,
-                "status": response.data.status,
-                "clientOrderId": response.data.client_order_id,
-                "price": str(getattr(response.data, 'price', 0)),
-                "avgPrice": str(getattr(response.data, 'avg_price', 0)),
-                "executedQty": str(getattr(response.data, 'executed_qty', 0)),
-                "cummulativeQuoteQty": str(getattr(response.data, 'cumulative_quote_qty', 0)),
+                "orderId": str(data.order_id),
+                "symbol": data.symbol,
+                "status": data.status,
+                "clientOrderId": data.client_order_id,
+                "price": str(getattr(data, 'price', 0)),
+                "avgPrice": str(getattr(data, 'avg_price', 0)),
+                "executedQty": str(getattr(data, 'executed_qty', 0)),
+                "cummulativeQuoteQty": str(getattr(data, 'cumulative_quote_qty', 0)),
             }
         except Exception as e:
             self._handle_error(e)
@@ -177,7 +198,8 @@ class BinanceRestClient:
     def futures_position_information(self, symbol: str = None) -> List[Dict[str, Any]]:
         """Get current position information."""
         try:
-            response = self._client.rest_api.get_position_information(symbol=symbol)
+            response = self._client.rest_api.position_information_v2(symbol=symbol)
+            data = self._unwrap_data(response.data())
             return [
                 {
                     "symbol": pos.symbol,
@@ -186,7 +208,7 @@ class BinanceRestClient:
                     "leverage": str(pos.leverage),
                     "unrealizedProfit": str(getattr(pos, 'unrealized_profit', '0')),
                 }
-                for pos in response.data
+                for pos in data
             ]
         except Exception as e:
             self._handle_error(e)
@@ -195,13 +217,14 @@ class BinanceRestClient:
         """Get order details."""
         try:
             response = self._client.rest_api.query_order(symbol=symbol, order_id=int(orderId))
+            data = self._unwrap_data(response.data())
             return {
-                "orderId": str(response.data.order_id),
-                "symbol": response.data.symbol,
-                "status": response.data.status,
-                "price": str(getattr(response.data, 'price', 0)),
-                "avgPrice": str(getattr(response.data, 'avg_price', 0)),
-                "executedQty": str(getattr(response.data, 'executed_qty', 0)),
+                "orderId": str(data.order_id),
+                "symbol": data.symbol,
+                "status": data.status,
+                "price": str(getattr(data, 'price', 0)),
+                "avgPrice": str(getattr(data, 'avg_price', 0)),
+                "executedQty": str(getattr(data, 'executed_qty', 0)),
             }
         except Exception as e:
             self._handle_error(e)
@@ -209,8 +232,9 @@ class BinanceRestClient:
     def get_symbol_ticker(self, symbol: str) -> Dict[str, Any]:
         """Get symbol price ticker."""
         try:
-            response = self._client.rest_api.symbol_ticker(symbol=symbol)
-            return {"symbol": response.data.symbol, "price": str(response.data.price)}
+            response = self._client.rest_api.symbol_price_ticker(symbol=symbol)
+            data = self._unwrap_data(response.data())
+            return {"symbol": data.symbol, "price": str(data.price)}
         except Exception as e:
             self._handle_error(e)
 
@@ -228,26 +252,16 @@ class BinanceRestClient:
             if "endTime" in params or "end_time" in params:
                 kline_params["end_time"] = params.get("end_time") or params.get("endTime")
 
-            response = self._client.rest_api.klines(**kline_params)
-
-            return [
-                [
-                    k.open_time, str(k.open), str(k.high), str(k.low), str(k.close),
-                    str(k.volume), k.close_time,
-                    str(getattr(k, 'quote_asset_volume', '0')),
-                    getattr(k, 'number_of_trades', 0),
-                    str(getattr(k, 'taker_buy_base_asset_volume', '0')),
-                    str(getattr(k, 'taker_buy_quote_asset_volume', '0')),
-                ]
-                for k in response.data
-            ]
+            response = self._client.rest_api.kline_candlestick_data(**kline_params)
+            # Klines returns data directly as a list of lists, no unwrapping needed
+            return response.data()
         except Exception as e:
             self._handle_error(e)
 
     def ping(self) -> Dict[str, Any]:
         """Test connectivity."""
         try:
-            self._client.rest_api.ping()
+            self._client.rest_api.check_server_time()
             return {}
         except Exception as e:
             self._handle_error(e)
