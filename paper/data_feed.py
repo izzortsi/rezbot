@@ -14,6 +14,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _pandas_freq(timeframe: str) -> str:
+    """Convert timeframe string to pandas-compatible frequency string.
+
+    Pandas 3.0+ requires "5min" instead of "5m".
+
+    Args:
+        timeframe: Timeframe string (e.g., "5m", "1h", "1d")
+
+    Returns:
+        Pandas-compatible frequency string
+    """
+    if timeframe.endswith('m') and not timeframe.endswith('min'):
+        # "5m" -> "5min"
+        num = timeframe[:-1]
+        return f"{num}min"
+    return timeframe
+
+
 class DataGranularity(Enum):
     """Time granularity for data."""
     ONE_MINUTE = "1m"
@@ -187,7 +205,7 @@ class HistoricalDataFeed(DataFeed):
         timestamps = pd.date_range(
             start=self.start_date,
             periods=periods + 1,
-            freq=self.timeframe
+            freq=_pandas_freq(self.timeframe)
         )
 
         # Generate OHLCV from close prices

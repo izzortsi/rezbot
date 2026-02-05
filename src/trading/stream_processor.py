@@ -174,12 +174,9 @@ class StreamProcessor:
         indicators = self.indicator_processor.get_indicators(timeout=0.01)
         if indicators is not None:
             with self._lock:
-                # Update data window with new indicators
-                for col in indicators.columns:
-                    if col in self.data_window.columns:
-                        self.data_window[col].update(indicators[col])
-                    else:
-                        self.data_window[col] = indicators[col]
+                # Update data window with new indicators (pandas 3.0+ compatible)
+                update_dict = {col: indicators[col] for col in indicators.columns}
+                self.data_window.update(update_dict)
                 logger.debug("Updated data window with computed indicators")
                 return True
         return False
@@ -204,21 +201,12 @@ class StreamProcessor:
             self._last_price = c
             self._last_update_time = time.time()
 
-            # Create new row
-            now_time = pd.Timestamp.now(tz="UTC")
+            # Create new row - use naive timestamp to match historical data
+            now_time = pd.Timestamp.now().tz_localize(None)  # naive timestamp
             last_index = self.data_window.index[-1]
 
-            new_row = pd.DataFrame({
-                "date": [now_time],
-                "open": [o],
-                "high": [h],
-                "low": [l],
-                "close": [c],
-                "volume": [v]
-            }, index=[last_index])
-
-            # Update close price in data window
-            self.data_window.close.update(new_row.close)
+            # Update close price in data window (pandas 3.0+ compatible)
+            self.data_window.loc[last_index, "close"] = c
 
             # Submit indicator computation to process pool (non-blocking)
             with self._lock:
@@ -226,12 +214,13 @@ class StreamProcessor:
 
             # Check if we should add new candle
             tf_seconds = interval_to_milliseconds(self.config.timeframe) * 0.001
-            time_diff = (
-                self.data_window.date.values[-1] -
-                self.data_window.date.values[-2]
-            )
 
-            if time_diff >= pd.Timedelta(f"{tf_seconds} seconds"):
+            # Handle timezone-aware comparison - convert to naive timestamps
+            last_date = pd.Timestamp(self.data_window.date.values[-1]).tz_localize(None)
+            prev_date = pd.Timestamp(self.data_window.date.values[-2]).tz_localize(None)
+            time_diff = (last_date - prev_date).total_seconds()
+
+            if time_diff >= tf_seconds:
                 # Add new candle
                 self.data_window.drop(index=0, axis=0, inplace=True)
                 new_row_full = self._create_full_row(now_time, o, h, l, c, v)

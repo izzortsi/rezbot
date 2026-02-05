@@ -34,13 +34,14 @@ class MacdStrategy(Strategy):
         hist_tail = trader.data_window.histogram.tail(self.entry_window)
 
         # Long entry: histogram negative and turning positive
+        # ta.increasing() returns 0 for first element, so we check if most are increasing
         if (np.all(hist_tail <= 0) and
-            np.all(ta.increasing(hist_tail).values == 1)):
+            ta.increasing(hist_tail).values.sum() >= self.entry_window - 1):
             return True, PositionType.LONG
 
         # Short entry: histogram positive and turning negative
         elif (np.all(hist_tail >= 0) and
-              np.all(ta.decreasing(hist_tail).values == 1)):
+              ta.decreasing(hist_tail).values.sum() >= self.entry_window - 1):
             return True, PositionType.SHORT
 
         return False, None
@@ -157,17 +158,25 @@ class TrendReversalStrategy(Strategy):
 
         hist = trader.data_window.histogram
 
-        # Long entry: negative histogram with reversal
-        if (np.all(hist.tail(self.entry_window) <= 0) and
-            ta.increasing(hist.tail(2)).values[-1] == 1 and
-            ta.decreasing(hist.tail(2)).values[-2] == 1):
-            return True, PositionType.LONG
+        # Long entry: negative histogram with reversal pattern
+        # Looking for: was decreasing (going more negative), now increasing
+        hist_tail = hist.tail(self.entry_window)
+        if (np.all(hist_tail <= 0) and len(hist_tail) >= 4):
+            # Check if the first part was decreasing and last part is increasing
+            first_part = hist_tail[:2]
+            last_part = hist_tail[-2:]
+            if (ta.decreasing(first_part).values[-1] == 1 and
+                ta.increasing(last_part).values[-1] == 1):
+                return True, PositionType.LONG
 
-        # Short entry: positive histogram with reversal
-        elif (np.all(hist.tail(self.entry_window) >= 0) and
-              ta.decreasing(hist.tail(2)).values[-1] == 1 and
-              ta.increasing(hist.tail(2)).values[-2] == 1):
-            return True, PositionType.SHORT
+        # Short entry: positive histogram with reversal pattern
+        # Looking for: was increasing, now decreasing
+        elif (np.all(hist_tail >= 0) and len(hist_tail) >= 4):
+            first_part = hist_tail[:2]
+            last_part = hist_tail[-2:]
+            if (ta.increasing(first_part).values[-1] == 1 and
+                ta.decreasing(last_part).values[-1] == 1):
+                return True, PositionType.SHORT
 
         return False, None
 

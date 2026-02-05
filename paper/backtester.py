@@ -451,7 +451,18 @@ class Backtester:
         """Update the equity curve."""
         if self._position_manager.is_positioned:
             position = self._position_manager.position
-            current_price = self._data_feed.current_price if self._data_feed.current_time else position.entry_price
+            # Get current price from data feed
+            if hasattr(self._data_feed, '_data') and self._data_feed._data is not None:
+                # HistoricalDataFeed - get price from current candle
+                if self._data_feed._current_index > 0:
+                    current_price = self._data_feed._data.iloc[self._data_feed._current_index - 1]['close']
+                else:
+                    current_price = position.entry_price
+            elif hasattr(self._data_feed, 'current_price'):
+                # LiveSimulatedFeed
+                current_price = self._data_feed.current_price
+            else:
+                current_price = position.entry_price
             metrics = self._risk_manager.calculate_current_profit(position, current_price)
             equity = self._balance + metrics.unrealized_pnl
         else:

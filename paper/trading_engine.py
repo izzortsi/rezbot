@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 import logging
 
 from src.strategies.base import Strategy, PositionType
+from paper.data_feed import _pandas_freq
 from src.trading.position_manager import Position, PositionManager, TradeRecord
 from src.trading.risk_manager import RiskManager, RiskParameters, ProfitMetrics
 from src.trading.indicator_processor import IndicatorProcessor
@@ -231,7 +232,7 @@ class PaperTrader:
             index = pd.date_range(
                 end=candle.name,
                 periods=100,
-                freq=self._config.timeframe
+                freq=_pandas_freq(self._config.timeframe)
             )
             self._data_window = pd.DataFrame(index=index)
             self._data_window["close"] = float(candle["close"])

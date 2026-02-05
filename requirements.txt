@@ -81,3 +81,5 @@ websockets==15.0.1
 Werkzeug==3.1.5
 xyzservices==2025.11.0
 yarl==1.22.0
+plotly==6.1.2
+dash==3.1.1

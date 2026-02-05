@@ -132,7 +132,7 @@ class ThreadedATrader(StoppableThread):
         self.running_candles = []
 
         # Tracking properties (for backwards compatibility)
-        self.cum_profit = 0
+        # Note: cum_profit is now a property that delegates to position_manager
         self.num_trades = 0
         self.start_time = time.time()
         self.init_time = time.time()

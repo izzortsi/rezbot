@@ -194,7 +194,7 @@ class TestTrendReversalStrategy(unittest.TestCase):
             timeframe="30m",
             take_profit=6.0,
             stoploss=-0.2,
-            entry_window=3,
+            entry_window=4,
             exit_window=0
         )
         self.strategy = TrendReversalStrategy(params)
@@ -203,16 +203,11 @@ class TestTrendReversalStrategy(unittest.TestCase):
     def test_entry_reversal_long(self):
         """Test long reversal entry signal."""
         # Histogram: negative, with reversal pattern
-        # Need: all tail(entry_window=3) <= 0, and decreasing then increasing
-        # Pattern: ... positive, positive, [-15, -10, -5]
-        # ta.decreasing([-15, -10]) -> values=[0, 1] -> values[-2]=0, values[-1]=1
-        # ta.increasing([-10, -5]) -> values=[0, 1] -> values[-2]=0, values[-1]=1
-        # So we need: values[-2]==1 from decreasing, values[-1]==1 from increasing
-        # This means we need: [decreasing, increasing] = [-20, -10, -5]
-        # ta.decreasing([-20, -10]) -> values=[0, 1] -> values[-1]=1
-        # ta.increasing([-10, -5]) -> values=[0, 1] -> values[-1]=1
-        histogram = np.concatenate([[10] * 47, [-20, -10, -5]])
-        hist_ema = np.concatenate([[10] * 47, [-18, -9, -4]])
+        # Pattern: [-20, -25, -20, -15]
+        # First 2 [-20, -25]: decreasing (going more negative)
+        # Last 2 [-20, -15]: increasing (reversing upward)
+        histogram = np.concatenate([[10] * 46, [-20, -25, -20, -15]])
+        hist_ema = np.concatenate([[10] * 46, [-18, -22, -18, -13]])
         self.trader.data_window['histogram'] = histogram
         self.trader.data_window['hist_ema'] = hist_ema
 
