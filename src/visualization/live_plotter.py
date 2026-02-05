@@ -107,6 +107,7 @@ class LivePlotter(StoppableThread):
         self._cached_data: Optional[pd.DataFrame] = None
         self._cached_trades: List[Any] = []
         self._cached_position: Optional[Any] = None
+        self._cached_last_price: Optional[float] = None
 
         # Build Dash app
         self._build_app()
@@ -181,6 +182,9 @@ class LivePlotter(StoppableThread):
                 # Copy data window
                 self._cached_data = self.trader.data_window.copy()
 
+                # Get live price from stream processor (most current tick)
+                self._cached_last_price = self.trader.stream_processor.last_price
+
                 # Get trade history
                 self._cached_trades = self.trader.position_manager.get_trade_history()
 
@@ -198,6 +202,7 @@ class LivePlotter(StoppableThread):
             data = self._cached_data
             trades = self._cached_trades
             position = self._cached_position
+            last_price = self._cached_last_price
 
         if data is None or data.empty:
             return self._empty_figure()
@@ -205,6 +210,10 @@ class LivePlotter(StoppableThread):
         # Limit candles
         if len(data) > self.config.max_candles:
             data = data.tail(self.config.max_candles).reset_index(drop=True)
+
+        # Update last candle with live price
+        if last_price is not None and len(data) > 0:
+            data = self._update_last_candle_with_live_price(data, last_price)
 
         # Create subplots
         fig = make_subplots(
@@ -219,7 +228,7 @@ class LivePlotter(StoppableThread):
         current_row = 1
 
         # Row 1: Price with Bollinger Bands
-        self._add_price_traces(fig, data, current_row)
+        self._add_price_traces(fig, data, last_price, current_row)
         if self.config.show_bollinger:
             self._add_bollinger_bands(fig, data, current_row)
         if self.config.show_trades:
@@ -251,8 +260,59 @@ class LivePlotter(StoppableThread):
 
         return fig
 
-    def _add_price_traces(self, fig: go.Figure, data: pd.DataFrame, row: int) -> None:
-        """Add price traces (candlesticks or line)."""
+    def _update_last_candle_with_live_price(
+        self,
+        data: pd.DataFrame,
+        last_price: float
+    ) -> pd.DataFrame:
+        """Update the last candle with live price data.
+
+        This ensures the last candlestick reflects real-time price movements:
+        - Close is updated to the live price
+        - High is updated if live price exceeds current high
+        - Low is updated if live price is below current low
+
+        Args:
+            data: DataFrame with OHLCV data
+            last_price: Current live price from stream processor
+
+        Returns:
+            Updated DataFrame with live price reflected in last candle
+        """
+        if len(data) == 0:
+            return data
+
+        # Work on a copy to avoid modifying cached data
+        data = data.copy()
+
+        # Use iloc[-1] to always get the actual last row regardless of index values
+        close_col = data.columns.get_loc("close")
+        data.iloc[-1, close_col] = last_price
+
+        # Update high if live price exceeds it
+        if "high" in data.columns:
+            high_col = data.columns.get_loc("high")
+            current_high = data.iloc[-1, high_col]
+            if last_price > current_high:
+                data.iloc[-1, high_col] = last_price
+
+        # Update low if live price is below it
+        if "low" in data.columns:
+            low_col = data.columns.get_loc("low")
+            current_low = data.iloc[-1, low_col]
+            if last_price < current_low:
+                data.iloc[-1, low_col] = last_price
+
+        return data
+
+    def _add_price_traces(
+        self,
+        fig: go.Figure,
+        data: pd.DataFrame,
+        last_price: Optional[float],
+        row: int
+    ) -> None:
+        """Add price traces (candlesticks or line) with live price indicator."""
         if self.config.show_candlesticks and all(col in data.columns for col in ["open", "high", "low", "close"]):
             fig.add_trace(
                 go.Candlestick(
@@ -276,6 +336,19 @@ class LivePlotter(StoppableThread):
                     name="Close",
                     line=dict(color="#2196f3", width=2)
                 ),
+                row=row, col=1
+            )
+
+        # Add live price horizontal line
+        if last_price is not None:
+            fig.add_hline(
+                y=last_price,
+                line_dash="dot",
+                line_color="#00bcd4",
+                line_width=1,
+                annotation_text=f"Live: {last_price:.2f}",
+                annotation_position="right",
+                annotation_font_color="#00bcd4",
                 row=row, col=1
             )
 
@@ -491,13 +564,16 @@ class LivePlotter(StoppableThread):
             data = self._cached_data
             position = self._cached_position
             trades = self._cached_trades
+            last_price = self._cached_last_price
 
         parts = []
 
-        # Current price
-        if data is not None and not data.empty:
-            last_price = data["close"].iloc[-1]
-            parts.append(f"Price: {last_price:.2f}")
+        # Live price (from stream processor - most current)
+        if last_price is not None:
+            parts.append(f"Live: {last_price:.4f}")
+        elif data is not None and not data.empty:
+            # Fallback to data window close
+            parts.append(f"Price: {data['close'].iloc[-1]:.4f}")
 
         # Position status
         if position:
