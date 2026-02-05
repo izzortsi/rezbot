@@ -67,6 +67,12 @@ def parse_arguments():
                         help="EMA window for indicators")
     parser.add_argument("-m1", "--multiplier_1", default=1.2, type=float,
                         help="Standard deviation multiplier")
+    parser.add_argument("-p", "--plot", action="store_true",
+                        help="Enable live Plotly dashboard")
+    parser.add_argument("--plot-port", default=8050, type=int,
+                        help="Port for live plot dashboard (default: 8050)")
+    parser.add_argument("--plot-interval", default=1000, type=int,
+                        help="Plot update interval in ms (default: 1000)")
     return parser.parse_args()
 
 
@@ -187,6 +193,19 @@ def main():
             sys.exit(1)
 
         logger.info(f"Trader started: {trader.name}")
+
+        # Start live plotter if requested
+        if args.plot:
+            plotter = manager.start_live_plotter(
+                trader,
+                update_interval_ms=args.plot_interval,
+                port=args.plot_port
+            )
+            if plotter:
+                logger.info(f"Live plotter started at http://127.0.0.1:{args.plot_port}")
+            else:
+                logger.warning("Could not start live plotter (plotly/dash not installed)")
+
         logger.info("Press Ctrl+C to stop...")
 
         # Keep main thread alive

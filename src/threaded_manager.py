@@ -30,6 +30,12 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
+try:
+    from src.visualization import LivePlotter, PlotConfig, create_plotter_for_trader
+    HAS_PLOTLY = True
+except ImportError:
+    HAS_PLOTLY = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -431,3 +437,50 @@ class ThreadedManager:
             fig, animate, fargs=(trader,), interval=100, blit=True
         )
         plt.show()
+
+    def start_live_plotter(
+        self,
+        trader: ThreadedATrader,
+        update_interval_ms: int = 1000,
+        port: int = 8050,
+        **kwargs
+    ) -> Optional[Any]:
+        """Start a Plotly Dash live plotter for a trader.
+
+        This creates an interactive web dashboard with real-time updates
+        showing price charts, MACD histogram, Bollinger Bands, and P&L.
+
+        Args:
+            trader: The trader to visualize
+            update_interval_ms: Update interval in milliseconds
+            port: Web server port (default 8050)
+            **kwargs: Additional PlotConfig parameters:
+                - show_candlesticks: bool (default True)
+                - show_bollinger: bool (default True)
+                - show_macd: bool (default True)
+                - show_trades: bool (default True)
+                - show_pnl: bool (default True)
+                - max_candles: int (default 100)
+
+        Returns:
+            LivePlotter instance, or None if Plotly not available
+
+        Example:
+            trader = manager.start_trader(strategy, "BTCUSDT")
+            plotter = manager.start_live_plotter(trader, port=8080)
+            # Access at http://127.0.0.1:8080
+        """
+        if not HAS_PLOTLY:
+            logger.error(
+                "Plotly/Dash not available. Install with: pip install plotly dash"
+            )
+            return None
+
+        plotter = create_plotter_for_trader(
+            trader,
+            update_interval_ms=update_interval_ms,
+            port=port,
+            **kwargs
+        )
+        self._threads.append(plotter)
+        return plotter
