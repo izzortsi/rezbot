@@ -205,8 +205,12 @@ class StreamProcessor:
             now_time = pd.Timestamp.now().tz_localize(None)  # naive timestamp
             last_index = self.data_window.index[-1]
 
-            # Update close price in data window (pandas 3.0+ compatible)
+            # Update OHLC in data window (pandas 3.0+ compatible)
             self.data_window.loc[last_index, "close"] = c
+            if h > self.data_window.loc[last_index, "high"]:
+                self.data_window.loc[last_index, "high"] = h
+            if l < self.data_window.loc[last_index, "low"]:
+                self.data_window.loc[last_index, "low"] = l
 
             # Submit indicator computation to process pool (non-blocking)
             with self._lock:

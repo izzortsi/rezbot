@@ -376,7 +376,8 @@ class ThreadedATrader(StoppableThread):
         )
 
         date = klines.date
-        return pd.concat([date, df], axis=1)
+        ohlv = klines[["open", "high", "low", "volume"]]
+        return pd.concat([date, ohlv, df], axis=1)
 
     def _start_stream(self) -> None:
         """Start the WebSocket stream."""
