@@ -1,405 +1,480 @@
-from src import *
-from src.grabber import DataGrabber
-from src.stream_processer import StreamProcesser
-from unicorn_binance_rest_api.unicorn_binance_rest_api_exceptions import *
+"""ThreadedATrader - Lightweight trader coordinator.
+
+This module provides the refactored ThreadedATrader class that uses
+the new trading components and StoppableThread base class.
+"""
+
 import threading
+import time
+import os
+import pandas as pd
+from datetime import datetime
+from typing import Optional
+import logging
+
+from src import *
+from src.concurrency.threading import StoppableThread
+from src.strategies.base import Strategy, PositionType
+from src.trading import (
+    Position,
+    PositionManager,
+    StreamConfig,
+    StreamProcessor,
+    IndicatorProcessor,
+    TradeExecutor,
+    OrderSide,
+    RiskManager,
+    RiskParameters,
+)
+from src.grabber import DataGrabber
 from src.symbols_formats import FORMATS
 
+logger = logging.getLogger(__name__)
 
-class ThreadedATrader(threading.Thread):
-    def __init__(self, manager, name, strategy, symbol, leverage, is_real, qty, w1=5, m1 = 1.2):
 
-        threading.Thread.__init__(self)
+class ThreadedATrader(StoppableThread):
+    """Lightweight trader coordinator with hybrid concurrency.
 
-        self.setDaemon(True)
+    This class coordinates trading operations by delegating to
+    specialized components:
+    - PositionManager: Thread-safe position state
+    - StreamProcessor: WebSocket data processing
+    - IndicatorProcessor: Async indicator computation via process pool
+    - TradeExecutor: API calls and order management
+    - RiskManager: Profit/loss calculations
 
-        self.name = name
+    The main loop handles:
+    1. Processing WebSocket data (I/O-bound, in thread)
+    2. Checking if indicators are ready (CPU-bound from process pool)
+    3. Evaluating trading signals
+    4. Executing trades if signals trigger
+
+    Example:
+        trader = ThreadedATrader(
+            manager=manager,
+            name="pullback_30m_btcusdt",
+            strategy=strategy,
+            symbol="BTCUSDT",
+            leverage=5,
+            is_real=False,
+            qty=0.002,
+            w1=5,
+            m1=1.2
+        )
+        # Thread auto-starts, no need to call start()
+    """
+
+    def __init__(
+        self,
+        manager,
+        name: str,
+        strategy: Strategy,
+        symbol: str,
+        leverage: int,
+        is_real: bool = False,
+        qty: float = 0.002,
+        w1: int = 5,
+        m1: float = 1.2
+    ):
+        """Initialize the threaded trader.
+
+        Args:
+            manager: ThreadedManager instance
+            name: Unique trader name
+            strategy: Strategy instance
+            symbol: Trading symbol
+            leverage: Trading leverage
+            is_real: Whether to use real trading
+            qty: Base quantity
+            w1: EMA window for indicators
+            m1: Standard deviation multiplier for Bollinger Bands
+        """
+        # Initialize base thread class
+        super().__init__(name=name, daemon=True)
+
+        # Basic properties
         self.manager = manager
-        self.bwsm = manager.bwsm
-        self.client = manager.client
+        self.name = name
         self.strategy = strategy
         self.symbol = symbol
         self.leverage = leverage
         self.is_real = is_real
-
         self.w1 = w1
         self.m1 = m1
 
-        if self.is_real:
-            if self.symbol.upper() in FORMATS.keys():
+        # Initialize trading components
+        self.position_manager = PositionManager()
 
-                format = FORMATS[self.symbol.upper()]
+        self.indicator_processor = IndicatorProcessor(
+            process_pool=manager.process_pool,
+            w1=w1,
+            m1=m1,
+            macd_params=strategy.macd_params
+        )
 
-                qty_precision = int(format["quantityPrecision"])
-                price_precision = int(format["pricePrecision"])
-                print(qty_precision)
-                print(price_precision)
-                notional = 5
-                min_qty = 1 / 10 ** qty_precision
+        self.trade_executor = TradeExecutor(
+            client=manager.client,
+            symbol=symbol,
+            leverage=leverage,
+            is_real=is_real
+        )
 
-                ticker = self.client.get_symbol_ticker(symbol=self.symbol.upper())
-                price = float(ticker["price"])
-                multiplier = qty * np.ceil(notional / (price * min_qty))
-                # f"{float(value):.{decimal_count}f}"
+        risk_params = RiskParameters(
+            stoploss_pct=strategy.stoploss,
+            take_profit_pct=strategy.take_profit,
+            leverage=leverage
+        )
+        self.risk_manager = RiskManager(risk_params)
 
-                self.qty = f"{float(multiplier*min_qty):.{qty_precision}f}"
-                self.price_formatter = lambda x: f"{float(x):.{price_precision-1}f}"
-                print(min_qty)
-                print(self.qty)
-                print(self.price_formatter(price))
+        # Legacy data grabber for initial data window
+        self.grabber = DataGrabber(manager.client)
+        self.data_window = self._get_initial_data_window()
+        self.running_candles = []
 
-            self.client.futures_change_leverage(
-                symbol=self.symbol, leverage=self.leverage
-            )
-
-        # self.profits = []
+        # Tracking properties (for backwards compatibility)
         self.cum_profit = 0
         self.num_trades = 0
-
-        self.stoploss = strategy.stoploss
-        self.take_profit = strategy.take_profit
-        self.entry_window = strategy.entry_window
-        self.exit_window = strategy.exit_window
-        self.macd_params = strategy.macd_params
-
-        self.keep_running = True
-        self.stream_id = None
-        self.stream_name = None
-
-        self.grabber = DataGrabber(self.client)
-        self.data_window = self._get_initial_data_window()
-        self.running_candles = []  # self.data_window.copy(deep=True)
-        # self.data = None
-
-        self.start_time = time.time()  # wont change, used to compute uptime
+        self.start_time = time.time()
         self.init_time = time.time()
         self.now = time.time()
+        self.confirmatory_data = []
 
-        self.is_positioned = False
-        self.position = None
-        self.position_type = None
-        self.entry_price = None
-        self.entry_time = None
-        self.exit_price = None
-        self.exit_time = None
-        self.last_price = None
-        self.now_time = None
-        self.opening_order = None
-        self.closing_order = None
-        self.tp_order = None
-        self.current_profit = None
-        self.current_percentual_profit = None
-        # self.uptime = None
-
+        # Setup logging
         strf_init_time = strf_epoch(self.init_time, fmt="%H-%M-%S")
         self.name_for_logs = f"{self.name}-{strf_init_time}"
-
         self.logger = setup_logger(
             f"{self.name}-logger",
             os.path.join(logs_for_this_run, f"{self.name_for_logs}.log"),
         )
-        self.csv_log_path = os.path.join(logs_for_this_run, f"{self.name_for_logs}.csv")
-        self.csv_log_path_candles = os.path.join(
-            logs_for_this_run, f"{self.name_for_logs}_candles.csv"
+        self.csv_log_path = os.path.join(
+            logs_for_this_run, f"{self.name_for_logs}.csv"
         )
-        self.confirmatory_data = []
 
-        self._start_new_stream()
+        # Setup stream processor
+        stream_config = StreamConfig(
+            symbol=symbol,
+            timeframe=strategy.timeframe,
+            w1=w1,
+            m1=m1,
+            macd_params=strategy.macd_params
+        )
+        self.stream_processor = StreamProcessor(
+            config=stream_config,
+            bwsm=manager.bwsm,
+            data_window=self.data_window,
+            indicator_processor=self.indicator_processor
+        )
+
+        # Start the stream
+        self._start_stream()
+
+        # Auto-start thread
         self.start()
 
-    def run(self):
+    def _run_impl(self) -> None:
+        """Main trader loop.
 
-        while self.keep_running:
-            self.stream_processer._process_stream_data()
-            # if (
-            #     (self.data_window.date.values[-1] - self.data_window.date.values[-2])
-            #         >= pd.Timedelta("20 seconds")
-            #     ):
+        This is the main loop that:
+        1. Processes WebSocket data from the stream
+        2. Updates indicators when computation completes
+        3. Checks trading signals
+        4. Executes trades if signals trigger
+        """
+        while not self.should_stop():
             try:
-                # print(self.manager.client.ping())
-                self.manager.client.ping()
-            except BinanceAPIException as error:
-                self.logger.info(f"pinging, {error}")
+                # Process WebSocket data (I/O-bound)
+                if self.stream_processor.process_next():
+                    # New candle added
+                    pass
+
+                # Update indicators if computation complete (CPU-bound)
+                if self.stream_processor.update_indicators_if_ready():
+                    # Indicators ready, check signals
+                    self._check_trading_signals()
+
+                # Health check
+                try:
+                    self.manager.client.ping()
+                except Exception as e:
+                    self.logger.error(f"Connection error: {e}")
+
+                # Log trades to CSV
+                self._drop_trades_to_csv()
+
+            except Exception as e:
+                self.logger.error(f"Error in main loop: {e}")
+
+    def _check_trading_signals(self) -> None:
+        """Check and act on trading signals.
+
+        This method evaluates entry/exit signals and executes trades.
+        """
+        if self.position_manager.is_positioned:
+            self._check_exit_conditions()
+        else:
+            self._check_entry_condition()
+
+    def _check_entry_condition(self) -> None:
+        """Check entry signal and enter position if triggered."""
+        should_enter, pos_type = self.strategy.entry_signal(self)
+
+        if should_enter and pos_type is not None:
+            entry_price = self.data_window.close.values[-1]
+            entry_time = pd.Timestamp.now(tz="UTC")
+
+            position = Position(
+                symbol=self.symbol,
+                position_type=pos_type,
+                entry_price=entry_price,
+                entry_time=entry_time,
+                qty=self._get_qty(),
+                leverage=self.leverage
+            )
+
             if self.is_real:
-                self._really_act_on_signal_limit()
+                # Execute real orders
+                self._execute_entry_order(pos_type)
             else:
-                self._test_act_on_signal()
-            self._drop_trades_to_csv()
+                # Test mode - just track position
+                self.position_manager.enter_position(position)
+                self.logger.info(
+                    f"TEST ENTRY: {entry_price} at {entry_time}; "
+                    f"type: {pos_type.name}"
+                )
 
-    def stop(self):
-        self.keep_running = False
-        self.bwsm.stop_stream(self.stream_id)
-        del self.manager.traders[self.name]
-        # self.worker._delete()
+    def _check_exit_conditions(self) -> None:
+        """Check exit conditions and exit if triggered."""
+        position = self.position_manager.position
+        if position is None:
+            return
 
-    def _side_from_int(self):
-        if self.position_type == -1:
-            return "SELL", "BUY"
-        elif self.position_type == 1:
-            return "BUY", "SELL"
+        # Get current profit metrics
+        current_price = self.stream_processor.last_price
+        if current_price is None:
+            return
 
-    def _drop_trades_to_csv(self):
-        updated_num_trades = len(self.confirmatory_data)
-        # print(updated_num_trades)
-        if updated_num_trades == 1 and self.num_trades == 0:
-            row = pd.DataFrame.from_dict(self.confirmatory_data)
-            # print(row)
-            row.to_csv(
-                self.csv_log_path,
-                header=True,
-                mode="w",
-                index=False,
+        metrics = self.risk_manager.calculate_current_profit(
+            position, current_price
+        )
+
+        exit_reason = None
+        exit_price = current_price
+        exit_time = pd.Timestamp.now(tz="UTC")
+
+        if self.risk_manager.check_stop_loss(metrics):
+            exit_reason = "SL"
+        elif self.strategy.exit_signal(self):
+            exit_reason = "TP"
+
+        if exit_reason:
+            if self.is_real:
+                # Close position in real trading
+                self._execute_exit_order(position.position_type)
+            else:
+                # Test mode - just close tracking
+                self.position_manager.exit_position(
+                    exit_price=exit_price,
+                    exit_time=exit_time,
+                    exit_reason=exit_reason
+                )
+                self.logger.info(
+                    f"TEST {exit_reason}: {exit_price} at {exit_time}; "
+                    f"pnl: {metrics.leveraged_profit:.2f}%"
+                )
+
+    def _execute_entry_order(self, pos_type: PositionType) -> None:
+        """Execute entry order in real trading.
+
+        Args:
+            pos_type: LONG or SHORT position type
+        """
+        side = OrderSide.BUY if pos_type.long_side else OrderSide.SELL
+        qty = self._get_qty()
+
+        result = self.trade_executor.enter_position(side, qty)
+
+        if result.success:
+            # Get actual entry price from API
+            entry_price = result.price
+            entry_time = pd.Timestamp.now(tz="UTC")
+
+            position = Position(
+                symbol=self.symbol,
+                position_type=pos_type,
+                entry_price=entry_price,
+                entry_time=entry_time,
+                qty=qty,
+                leverage=self.leverage
             )
 
-            self.num_trades += 1
-
-        elif (updated_num_trades > 1) and (updated_num_trades > self.num_trades):
-            # print(int(self.now - self.start_time))
-            row = pd.DataFrame.from_dict([self.confirmatory_data[-1]])
-            # print(row)
-            row.to_csv(
-                self.csv_log_path,
-                header=False,
-                mode="a",
-                index=False,
+            self.position_manager.enter_position(position)
+            self.logger.info(
+                f"ENTRY: {entry_price} at {entry_time}; type: {pos_type.name}"
             )
-            self.num_trades += 1
 
-    def _change_position(self):
-        self.is_positioned = not self.is_positioned
-        # time.sleep(0.1)
+            # Place take profit order
+            counterside = side.opposite
+            tp_price = self.risk_manager.compute_take_profit_price(
+                entry_price, pos_type
+            )
+            self.trade_executor.place_take_profit(counterside, tp_price, qty)
+        else:
+            self.logger.error(f"Entry order failed: {result.error}")
 
-    def _get_initial_data_window(self):
+    def _execute_exit_order(self, pos_type: PositionType) -> None:
+        """Execute exit order in real trading.
+
+        Args:
+            pos_type: LONG or SHORT position type
+        """
+        side = OrderSide.SELL if pos_type.long_side else OrderSide.BUY
+        qty = self._get_qty()
+
+        result = self.trade_executor.close_position(side, qty)
+
+        if result.success:
+            exit_price = result.price
+            exit_time = pd.Timestamp.now(tz="UTC")
+
+            # Record the trade
+            self.position_manager.exit_position(
+                exit_price=exit_price,
+                exit_time=exit_time,
+                exit_reason="MANUAL"
+            )
+            self.logger.info(f"EXIT: {exit_price} at {exit_time}")
+        else:
+            self.logger.error(f"Exit order failed: {result.error}")
+
+    def _get_qty(self) -> str:
+        """Get formatted quantity for trading.
+
+        Returns:
+            Formatted quantity string
+        """
+        if self.is_real and hasattr(self, 'qty'):
+            return self.qty
+        return str(self.trade_executor._format_qty(0.001))
+
+    def _get_initial_data_window(self) -> pd.DataFrame:
+        """Get initial data window with historical data.
+
+        Returns:
+            DataFrame with OHLCV and indicators
+        """
         klines = self.grabber.get_data(
             symbol=self.symbol,
             tframe=self.strategy.timeframe,
-            limit=2 * self.macd_params["slow"]+1,
+            limit=2 * self.strategy.macd_params["slow"] + 1,
         )
-        # last_kline_row = self.grabber.get_data(
-        #     symbol=self.symbol, tframe=self.strategy.timeframe, limit=1
-        # )
-        # klines = klines.append(last_kline_row, ignore_index=True)
-        date = klines.date
 
         df = self.grabber.compute_indicators(
-            klines.close, w1 = self.w1, m1 = self.m1, **self.strategy.macd_params
+            klines.close,
+            w1=self.w1,
+            m1=self.m1,
+            **self.strategy.macd_params
         )
 
-        df = pd.concat([date, df], axis=1)
-        return df
+        date = klines.date
+        return pd.concat([date, df], axis=1)
 
-    def _start_new_stream(self):
+    def _start_stream(self) -> None:
+        """Start the WebSocket stream."""
+        self.stream_processor.start_stream()
 
-        channel = "kline" + "_" + self.strategy.timeframe
-        market = self.symbol
+    def _drop_trades_to_csv(self) -> None:
+        """Write completed trades to CSV file."""
+        trades = self.position_manager.get_trade_history()
+        updated_num = len(trades)
 
-        stream_name = channel + "@" + market
+        if updated_num > 0:
+            if updated_num == 1 and self.num_trades == 0:
+                # First trade - write with header
+                row = pd.DataFrame([{
+                    "type": t.position.side,
+                    "entry_time": t.position.entry_time,
+                    "entry_price": t.position.entry_price,
+                    "exit_time": t.exit_time,
+                    "exit_price": t.exit_price,
+                    "percentual_difference": t.percentual_profit,
+                    "leveraged_percentual_difference": t.leveraged_profit,
+                    "cumulative_profit": self.position_manager.get_cumulative_profit(),
+                    "exit_reason": t.exit_reason,
+                } for t in trades])
+                row.to_csv(self.csv_log_path, header=True, mode="w", index=False)
+                self.num_trades += 1
+            elif updated_num > self.num_trades:
+                # Subsequent trades - append without header
+                trade = trades[-1]
+                row = pd.DataFrame([{
+                    "type": trade.position.side,
+                    "entry_time": trade.position.entry_time,
+                    "entry_price": trade.position.entry_price,
+                    "exit_time": trade.exit_time,
+                    "exit_price": trade.exit_price,
+                    "percentual_difference": trade.percentual_profit,
+                    "leveraged_percentual_difference": trade.leveraged_profit,
+                    "cumulative_profit": self.position_manager.get_cumulative_profit(),
+                    "exit_reason": trade.exit_reason,
+                }])
+                row.to_csv(self.csv_log_path, header=False, mode="a", index=False)
+                self.num_trades += 1
 
-        stream_id = self.bwsm.create_stream(
-            channel, market, stream_buffer_name=stream_name
-        )
+    def stop(self) -> None:
+        """Stop the trader gracefully.
 
-        self.stream_name = stream_name
-        self.stream_processer = StreamProcesser(self)
-        self.stream_id = stream_id
+        This method:
+        1. Requests thread stop
+        2. Stops the WebSocket stream
+        3. Removes from manager's trader list
+        """
+        super().stop()
+        self.stream_processor.stop()
 
-    def _test_act_on_signal(self):
+        # Remove from manager
+        with self.manager._traders_context() as traders:
+            if self.name in traders:
+                del traders[self.name]
 
-        if self.is_positioned:
+        self.logger.info(f"Trader {self.name} stopped")
 
-            self._set_current_profits()
+    # ============================================================
+    # Backwards Compatibility Properties
+    # ============================================================
 
-            if self.strategy.stoploss_check(self):
-                # print("sl")
+    @property
+    def is_positioned(self) -> bool:
+        """Check if currently in a position (backwards compatibility)."""
+        return self.position_manager.is_positioned
 
-                self.exit_price = self.last_price
-                self.exit_time = self.data_window.date.values[-1]
+    @property
+    def position_type(self) -> Optional[PositionType]:
+        """Get current position type (backwards compatibility)."""
+        return self.position_manager.position_type
 
-                self._register_trade_data(f"SL")
-                self._change_position()
-                self.entry_price = None
-                self.exit_price = None
+    @property
+    def entry_price(self) -> Optional[float]:
+        """Get entry price (backwards compatibility)."""
+        return self.position_manager.entry_price
 
-            elif self.strategy.exit_signal(self):
-                # print("tp")
+    @property
+    def last_price(self) -> Optional[float]:
+        """Get last price (backwards compatibility)."""
+        return self.stream_processor.last_price
 
-                self.exit_price = self.last_price
-                self.exit_time = self.data_window.date.values[-1]
-
-                self._register_trade_data(f"TP")
-                self._change_position()
-                self.entry_price = None
-                self.exit_price = None
-
-        else:
-            if self.strategy.entry_signal(self):
-                self.entry_price = self.data_window.close.values[-1]
-                self.entry_time = self.data_window.date.values[-1]
-                self.logger.info(
-                    f"ENTRY: E:{self.entry_price} at t:{self.entry_time}; type: {self.position_type}"
-                )
-                self._change_position()
-
-    def _set_current_profits(self):
-
-        self.last_price = self.data_window.close.values[-1]
-
-        if self.position_type == 1:
-
-            self.current_profit = (self.last_price - self.entry_price) - 0.0004 * (
-                self.last_price + self.entry_price
+    @property
+    def current_percentual_profit(self) -> float:
+        """Get current profit percentage (backwards compatibility)."""
+        position = self.position_manager.position
+        current_price = self.last_price
+        if position and current_price:
+            metrics = self.risk_manager.calculate_current_profit(
+                position, current_price
             )
-            self.current_percentual_profit = (
-                self.current_profit / self.entry_price
-            ) * 100
+            return metrics.percentual_profit
+        return 0.0
 
-        elif self.position_type == -1:
-
-            self.current_profit = -1 * (self.last_price - self.entry_price) - 0.0004 * (
-                self.last_price + self.entry_price
-            )
-            self.current_percentual_profit = (
-                self.current_profit / self.last_price
-            ) * 100
-
-    def _register_trade_data(self, tp_or_sl):
-
-        self.cum_profit += self.current_percentual_profit * self.leverage
-        self.confirmatory_data.append(
-            {
-                "TP/SL": f"{tp_or_sl}",
-                "type": f"{'LONG' if self.position_type == 1 else 'SHORT'}",
-                "entry_time": self.entry_time,
-                "entry_price": self.entry_price,
-                "exit_time": self.exit_time,
-                "exit_price": self.exit_price,
-                "percentual_difference": self.current_percentual_profit,
-                "leveraged percentual_difference": self.current_percentual_profit
-                * self.leverage,
-                "cumulative_profit": self.cum_profit,
-            }
-        )
-
-        self.logger.info(
-            f"{tp_or_sl}: abs: {self.current_profit}; leveraged %: {self.current_percentual_profit*self.leverage}%; cum_profit: {self.cum_profit}%"
-        )
-
-    def _set_actual_profits(self):
-
-        self.current_profit = self.position_type * (
-            self.exit_price - self.entry_price
-        ) - 0.0004 * (self.exit_price + self.entry_price)
-
-        if self.position_type == 1:
-            self.current_percentual_profit = (
-                self.current_profit / self.entry_price
-            ) * 100
-        elif self.position_type == -1:
-            self.current_percentual_profit = (
-                self.current_profit / self.exit_price
-            ) * 100
-
-    def _really_act_on_signal_limit(self):
-
-        if not self.is_positioned:
-            if self.strategy.entry_signal(self):
-                self.send_orders()
-                self._change_position()
-
-        elif self.is_positioned:
-            self._set_current_profits()
-            if self.strategy.stoploss_check(self):
-                try:
-                    self._close_position()
-                    self._set_actual_profits()
-                    self._register_trade_data("SL")
-                    self._change_position()
-                    self.entry_price = None
-                    self.exit_price = None
-                except BinanceAPIException as error:
-                    self.logger.info(f"sl order, {error}")
-
-            elif self.tp_order is not None:
-
-                self.tp_order = self.client.futures_get_order(
-                    symbol=self.symbol.upper(), orderId=self.tp_order["orderId"]
-                )
-                if self.tp_order["status"] == "FILLED":
-                    self.exit_price = float(self.tp_order["avgPrice"])
-                    self.qty = self.tp_order["executedQty"]
-                    self.exit_time = to_datetime_tz(
-                        self.tp_order["updateTime"], unit="ms"
-                    )
-                    self._set_actual_profits()
-                    self._register_trade_data(f"TP")
-                    self._change_position()
-                    self.entry_price = None
-                    self.exit_price = None
-
-    def send_orders(self, protect=False):
-
-        if self.position_type == -1:
-            side = "SELL"
-            counterside = "BUY"
-        elif self.position_type == 1:
-            side = "BUY"
-            counterside = "SELL"
-
-        try:
-            new_position = self.client.futures_create_order(
-                symbol=self.symbol,
-                side=side,
-                type="MARKET",
-                quantity=self.qty,
-                priceProtect=protect,
-                workingType="CONTRACT_PRICE",
-            )
-
-        except BinanceAPIException as error:
-            print(type(error))
-            print("positioning, ", error)
-        else:
-            self.position = self.client.futures_position_information(
-                symbol=self.symbol
-            )[-1]
-            print(self.position)
-            self.entry_price = float(self.position["entryPrice"])
-            self.entry_time = to_datetime_tz(self.position["updateTime"], unit="ms")
-            # self.qty = self.position[0]["positionAmt"]
-            self.tp_price = compute_exit(self.entry_price, self.take_profit, side=side)
-            self.logger.info(
-                f"ENTRY: E:{self.entry_price} at t:{self.entry_time}; type: {self.position_type}"
-            )
-            tp_price = self.price_formatter(self.tp_price)
-            print(tp_price)
-            try:
-                self.tp_order = self.client.futures_create_order(
-                    symbol=self.symbol,
-                    side=counterside,
-                    type="LIMIT",
-                    price=tp_price,
-                    workingType="CONTRACT_PRICE",
-                    quantity=self.qty,
-                    reduceOnly=True,
-                    priceProtect=protect,
-                    timeInForce="GTC",
-                )
-            except BinanceAPIException as error:
-
-                print("tp order, ", error)
-
-    def _close_position(self):
-        _, counterside = self._side_from_int()
-        self.closing_order = self.client.futures_create_order(
-            symbol=self.symbol,
-            side=counterside,
-            type="MARKET",
-            workingType="MARK_PRICE",
-            quantity=self.qty,
-            reduceOnly=True,
-            priceProtect=False,
-            newOrderRespType="RESULT",
-        )
-        if self.closing_order["status"] == "FILLED":
-            self.exit_price = float(self.closing_order["avgPrice"])
-            self.exit_time = to_datetime_tz(self.closing_order["updateTime"], unit="ms")
+    @property
+    def cum_profit(self) -> float:
+        """Get cumulative profit (backwards compatibility)."""
+        return self.position_manager.get_cumulative_profit()

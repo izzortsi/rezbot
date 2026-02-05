@@ -34,13 +34,13 @@ class MacdStrategy(Strategy):
         hist_tail = trader.data_window.histogram.tail(self.entry_window)
 
         # Long entry: histogram negative and turning positive
-        if (np.alltrue(hist_tail <= 0) and
-            np.alltrue(ta.increasing(hist_tail).values == 1)):
+        if (np.all(hist_tail <= 0) and
+            np.all(ta.increasing(hist_tail).values == 1)):
             return True, PositionType.LONG
 
         # Short entry: histogram positive and turning negative
-        elif (np.alltrue(hist_tail >= 0) and
-              np.alltrue(ta.decreasing(hist_tail).values == 1)):
+        elif (np.all(hist_tail >= 0) and
+              np.all(ta.decreasing(hist_tail).values == 1)):
             return True, PositionType.SHORT
 
         return False, None
@@ -54,10 +54,10 @@ class MacdStrategy(Strategy):
         hist_tail = trader.data_window.histogram.tail(self.entry_window)
 
         if trader.position_type == PositionType.LONG:
-            return (np.alltrue(hist_tail > 0) and
+            return (np.all(hist_tail > 0) and
                     ta.decreasing(hist_tail).values[-1])
         elif trader.position_type == PositionType.SHORT:
-            return (np.alltrue(hist_tail < 0) and
+            return (np.all(hist_tail < 0) and
                     ta.increasing(hist_tail).values[-1])
         return False
 
@@ -83,10 +83,10 @@ class MacdStrategy_0(MacdStrategy):
         hist_tail = trader.data_window.histogram.tail(self.entry_window)
 
         # Long entry: all histogram values negative
-        if np.alltrue(hist_tail < 0):
+        if np.all(hist_tail < 0):
             return True, PositionType.SHORT
         # Short entry: all histogram values positive
-        elif np.alltrue(hist_tail > 0):
+        elif np.all(hist_tail > 0):
             return True, PositionType.LONG
 
         return False, None
@@ -158,13 +158,13 @@ class TrendReversalStrategy(Strategy):
         hist = trader.data_window.histogram
 
         # Long entry: negative histogram with reversal
-        if (np.alltrue(hist.tail(self.entry_window) <= 0) and
+        if (np.all(hist.tail(self.entry_window) <= 0) and
             ta.increasing(hist.tail(2)).values[-1] == 1 and
             ta.decreasing(hist.tail(2)).values[-2] == 1):
             return True, PositionType.LONG
 
         # Short entry: positive histogram with reversal
-        elif (np.alltrue(hist.tail(self.entry_window) >= 0) and
+        elif (np.all(hist.tail(self.entry_window) >= 0) and
               ta.decreasing(hist.tail(2)).values[-1] == 1 and
               ta.increasing(hist.tail(2)).values[-2] == 1):
             return True, PositionType.SHORT

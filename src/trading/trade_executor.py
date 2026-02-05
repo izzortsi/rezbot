@@ -10,7 +10,24 @@ from typing import Optional
 from dataclasses import dataclass
 import logging
 
-from unicorn_binance_rest_api.unicorn_binance_rest_api_exceptions import BinanceAPIException
+# Try to import from unicorn_binance_rest_api, use Exception as fallback
+try:
+    from unicorn_binance_rest_api.unicorn_binance_rest_api_exceptions import (
+        BinanceAPIException,
+    )
+except ImportError:
+    # Create a fallback exception class for testing/paper trading
+    class BinanceAPIException(Exception):
+        """Fallback exception for when unicorn_binance_rest_api is not available."""
+        pass
+
+# Alias for compatibility
+ClientError = BinanceAPIException
+UnauthorizedError = BinanceAPIException
+TooManyRequestsError = BinanceAPIException
+BadRequestError = BinanceAPIException
+ServerError = BinanceAPIException
+NetworkError = BinanceAPIException
 from ..symbols_formats import FORMATS
 
 logger = logging.getLogger(__name__)

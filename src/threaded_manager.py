@@ -19,6 +19,8 @@ from src.config import ApiConfig
 from src.concurrency.multiprocessing import ProcessPoolManager
 from src.threaded_atrader import ThreadedATrader
 from src.tradingview_handlers import ThreadedTAHandler
+from src.trading.binance_client import create_binance_client
+from src.trading.binance_websocket import create_websocket_client
 
 # Optional imports for plotting
 try:
@@ -82,16 +84,18 @@ class ThreadedManager:
             # Try to load from environment
             self._api_config = ApiConfig.from_env()
 
-        # Initialize Binance clients
-        self.client = Client(
+        # Initialize Binance REST and WebSocket clients
+        self.client = create_binance_client(
             api_key=self._api_config.api_key,
             api_secret=self._api_config.api_secret,
-            exchange=self._api_config.exchange
+            testnet=self._api_config.exchange.endswith("testnet")
         )
-        self.bwsm = BinanceWebSocketApiManager(
-            output_default="UnicornFy",
-            exchange=self._api_config.exchange
+        self.bwsm = create_websocket_client(
+            api_key=self._api_config.api_key,
+            api_secret=self._api_config.api_secret,
+            testnet=self._api_config.exchange.endswith("testnet")
         )
+        logger.info("Binance SDK clients initialized (binance-sdk-derivatives-trading-usds-futures)")
 
         # Configuration
         self.rate = rate

@@ -14,15 +14,8 @@ from urllib.parse import urlencode
 from tradingview_ta import TA_Handler, Interval, Exchange
 import tradingview_ta
 
-from unicorn_binance_rest_api.unicorn_binance_rest_api_manager import (
-    BinanceRestApiManager as Client,
-)
-from unicorn_binance_rest_api.unicorn_binance_rest_api_helpers import (
-    interval_to_milliseconds,
-)
-from unicorn_binance_websocket_api.unicorn_binance_websocket_api_manager import (
-    BinanceWebSocketApiManager,
-)
+# Binance SDK now uses binance-sdk-derivatives-trading-usds-futures
+# Old unicorn-binance imports removed
 
 # CONSTANTS
 
@@ -31,29 +24,6 @@ API_SECRET = os.environ.get("API_SECRET")
 UTCM3 = -pd.Timedelta("3:00:00")
 
 # AUXILIARY FUNCTIONS
-
-
-def futures_mark_price_klines(self, **params):
-    """Kline/candlestick bars for a symbol. Klines are uniquely identified by their open time.
-    https://binance-docs.github.io/apidocs/futures/en/#kline-candlestick-data-market_data
-    """
-    return self._request_futures_api("get", "markPriceKlines", data=params)
-
-
-def futures_place_batch_order(self, **params):
-    """Send in new orders.
-    https://binance-docs.github.io/apidocs/delivery/en/#place-multiple-orders-trade
-    To avoid modifying the existing signature generation and parameter order logic,
-    the url encoding is done on the special query param, batchOrders, in the early stage.
-    """
-    query_string = urlencode(params)
-    query_string = query_string.replace("%27", "%22")
-    params["batchOrders"] = query_string[12:]
-    return self._request_futures_api("post", "batchOrders", True, data=params)
-
-
-Client.futures_mark_price_klines = futures_mark_price_klines
-Client.futures_place_batch_order = futures_place_batch_order
 
 
 def name_trader(strategy, symbol):

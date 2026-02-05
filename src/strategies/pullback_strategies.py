@@ -66,7 +66,7 @@ class PullbackStrategy_1(PullbackStrategy):
 
         # Long entry with additional confirmations
         if (data.close.values[-1] <= data.ci.values[-1] and
-            np.alltrue(data.histogram.tail(self.entry_window) >= 0) and
+            np.all(data.histogram.tail(self.entry_window) >= 0) and
             ta.increasing(data.hist_ema, length=self.entry_window)):
             return True, PositionType.LONG
 

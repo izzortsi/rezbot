@@ -1,16 +1,57 @@
 """Thread-safe configuration management.
 
 This module provides thread-safe configuration classes for managing
-API credentials and other settings.
+API credentials and other settings. It uses python-dotenv to load
+environment variables from a .env file.
 """
 
 import os
 from dataclasses import dataclass
 from threading import Lock
 from typing import Optional
+from pathlib import Path
 import logging
 
+# Try to load dotenv
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
+def _load_env_file():
+    """Load environment variables from .env file.
+
+    This function loads environment variables from:
+    1. .env in the current working directory
+    2. .env in the project root (parent of src directory)
+
+    It only runs once to avoid repeated loading.
+    """
+    if not DOTENV_AVAILABLE:
+        return
+
+    # Already loaded check
+    if getattr(_load_env_file, "_loaded", False):
+        return
+
+    # Load from current directory
+    load_dotenv()
+
+    # Also try to load from project root
+    try:
+        project_root = Path(__file__).parent.parent
+        env_file = project_root / ".env"
+        if env_file.exists():
+            load_dotenv(env_file)
+            logger.debug(f"Loaded .env from {env_file}")
+    except Exception:
+        pass
+
+    _load_env_file._loaded = True
 
 
 @dataclass(frozen=True)
@@ -34,7 +75,21 @@ class ApiConfig:
     def from_env(cls, exchange: str = "binance.com-futures") -> "ApiConfig":
         """Create ApiConfig from environment variables.
 
-        Reads API_KEY and API_SECRET from environment variables.
+        Reads BINANCE_API_KEY and BINANCE_API_SECRET from environment variables.
+        Automatically loads .env file if python-dotenv is available.
+
+        Priority (highest to lowest):
+        1. Explicitly passed environment variables
+        2. Variables loaded from .env file
+        3. System environment variables
+
+        Environment Variables:
+            BINANCE_API_KEY: Binance API key
+            BINANCE_API_SECRET: Binance API secret
+
+        For backwards compatibility, also checks:
+            API_KEY: Binance API key (deprecated)
+            API_SECRET: Binance API secret (deprecated)
 
         Args:
             exchange: The exchange to connect to
@@ -45,13 +100,30 @@ class ApiConfig:
         Raises:
             ValueError: If required environment variables are not set
         """
-        api_key = os.environ.get("API_KEY")
-        if not api_key:
-            raise ValueError("API_KEY environment variable not set")
+        # Load .env file if available
+        _load_env_file()
 
-        api_secret = os.environ.get("API_SECRET")
+        # Try new variable names first
+        api_key = os.environ.get("BINANCE_API_KEY")
+        api_secret = os.environ.get("BINANCE_API_SECRET")
+
+        # Fall back to old variable names for backwards compatibility
+        if not api_key:
+            api_key = os.environ.get("API_KEY")
         if not api_secret:
-            raise ValueError("API_SECRET environment variable not set")
+            api_secret = os.environ.get("API_SECRET")
+
+        if not api_key:
+            raise ValueError(
+                "BINANCE_API_KEY environment variable not set. "
+                "Either set it directly, export it, or add it to a .env file."
+            )
+
+        if not api_secret:
+            raise ValueError(
+                "BINANCE_API_SECRET environment variable not set. "
+                "Either set it directly, export it, or add it to a .env file."
+            )
 
         return cls(api_key=api_key, api_secret=api_secret, exchange=exchange)
 
@@ -112,8 +184,9 @@ class ConfigManager:
             The current ApiConfig
 
         Raises:
-            ValueError: If API_KEY or API_SECRET environment variables
-                        are not set and no config was explicitly set
+            ValueError: If BINANCE_API_KEY or BINANCE_API_SECRET
+                        environment variables are not set and no config
+                        was explicitly set
         """
         with self._config_lock:
             if self._api_config is None:
@@ -163,3 +236,30 @@ def set_api_config(config: ApiConfig) -> None:
         config: The ApiConfig to store
     """
     ConfigManager().set_api_config(config)
+
+
+def load_env_file(env_file: Optional[str] = None) -> None:
+    """Manually load environment variables from a .env file.
+
+    This function is useful if you want to explicitly load a specific
+    .env file rather than relying on automatic loading.
+
+    Args:
+        env_file: Path to the .env file. If None, searches for .env
+                  in current directory and project root.
+
+    Raises:
+        ImportError: If python-dotenv is not installed
+    """
+    if not DOTENV_AVAILABLE:
+        raise ImportError(
+            "python-dotenv is not installed. "
+            "Install it with: pip install python-dotenv"
+        )
+
+    if env_file:
+        load_dotenv(env_file)
+        logger.info(f"Loaded .env from {env_file}")
+    else:
+        _load_env_file()
+        logger.info("Loaded .env from default locations")

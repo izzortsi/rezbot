@@ -10,8 +10,23 @@ import time
 import pandas as pd
 from typing import Optional, Callable, Any
 from dataclasses import dataclass
-from unicorn_binance_rest_api.unicorn_binance_rest_api_helpers import interval_to_milliseconds
 import logging
+
+# Try to import from unicorn_binance_rest_api, use fallback for testing
+try:
+    from unicorn_binance_rest_api.unicorn_binance_rest_api_helpers import interval_to_milliseconds
+except ImportError:
+    # Fallback function for testing/paper trading
+    def interval_to_milliseconds(interval: str) -> int:
+        """Convert interval string to milliseconds (fallback)."""
+        units = {"m": 60000, "h": 3600000, "d": 86400000, "w": 604800000}
+        if interval.endswith("min"):
+            unit = "m"
+            num = int(interval[:-3])
+        else:
+            unit = interval[-1]
+            num = int(interval[:-1])
+        return num * units[unit]
 
 from .indicator_processor import IndicatorProcessor
 
