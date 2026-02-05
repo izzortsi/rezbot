@@ -31,7 +31,7 @@ except ImportError:
     HAS_MATPLOTLIB = False
 
 try:
-    from src.visualization import LivePlotter, PlotConfig, create_plotter_for_trader
+    from src.visualization import LivePlotter, PlotConfig, create_plotter_for_trader, create_dashboard_for_traders
     HAS_PLOTLY = True
 except ImportError:
     HAS_PLOTLY = False
@@ -440,35 +440,24 @@ class ThreadedManager:
 
     def start_live_plotter(
         self,
-        trader: ThreadedATrader,
+        traders,
         update_interval_ms: int = 1000,
         port: int = 8050,
         **kwargs
     ) -> Optional[Any]:
-        """Start a Plotly Dash live plotter for a trader.
+        """Start a Plotly Dash live dashboard for one or more traders.
 
-        This creates an interactive web dashboard with real-time updates
-        showing price charts, MACD histogram, Bollinger Bands, and P&L.
+        For a single trader, creates a single-symbol dashboard.
+        For multiple traders, creates a 2x2 grid dashboard.
 
         Args:
-            trader: The trader to visualize
+            traders: A single trader or list of traders to visualize
             update_interval_ms: Update interval in milliseconds
             port: Web server port (default 8050)
-            **kwargs: Additional PlotConfig parameters:
-                - show_candlesticks: bool (default True)
-                - show_bollinger: bool (default True)
-                - show_macd: bool (default True)
-                - show_trades: bool (default True)
-                - show_pnl: bool (default True)
-                - max_candles: int (default 100)
+            **kwargs: Additional PlotConfig parameters
 
         Returns:
-            LivePlotter instance, or None if Plotly not available
-
-        Example:
-            trader = manager.start_trader(strategy, "BTCUSDT")
-            plotter = manager.start_live_plotter(trader, port=8080)
-            # Access at http://127.0.0.1:8080
+            Dashboard instance, or None if Plotly not available
         """
         if not HAS_PLOTLY:
             logger.error(
@@ -476,8 +465,12 @@ class ThreadedManager:
             )
             return None
 
-        plotter = create_plotter_for_trader(
-            trader,
+        # Normalize to list
+        if not isinstance(traders, list):
+            traders = [traders]
+
+        plotter = create_dashboard_for_traders(
+            traders,
             update_interval_ms=update_interval_ms,
             port=port,
             **kwargs

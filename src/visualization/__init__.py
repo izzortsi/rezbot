@@ -11,6 +11,18 @@ Example:
     # Access the live dashboard at http://127.0.0.1:8050
 """
 
-from .live_plotter import LivePlotter, PlotConfig, create_plotter_for_trader
+from .live_plotter import (
+    LivePlotter,
+    MultiTraderDashboard,
+    PlotConfig,
+    create_plotter_for_trader,
+    create_dashboard_for_traders,
+)
 
-__all__ = ["LivePlotter", "PlotConfig", "create_plotter_for_trader"]
+__all__ = [
+    "LivePlotter",
+    "MultiTraderDashboard",
+    "PlotConfig",
+    "create_plotter_for_trader",
+    "create_dashboard_for_traders",
+]

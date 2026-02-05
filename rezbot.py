@@ -56,8 +56,8 @@ def parse_arguments():
                         help="Use real trading (not test mode)")
     parser.add_argument("-Q", "--qty", default=1, type=float,
                         help="Base quantity")
-    parser.add_argument("-S", "--symbol", default="sandusdt", type=str,
-                        help="Trading symbol")
+    parser.add_argument("-S", "--symbols", nargs="+", default=["sandusdt"],
+                        type=str, help="Trading symbols, up to 4 (e.g. -S btcusdt ethusdt)")
     parser.add_argument("-tf", "--timeframe", default="30m", type=str,
                         help="Trading timeframe")
     parser.add_argument("-s", "--strategy", default=1, type=int,
@@ -138,9 +138,14 @@ def main():
     """Main entry point."""
     args = parse_arguments()
 
+    # Validate symbol count
+    if len(args.symbols) > 4:
+        logger.error("Maximum 4 symbols supported")
+        sys.exit(1)
+
     # Log configuration
     logger.info(f"Starting Rezbot with strategy {_get_strategy_name(args.strategy)}")
-    logger.info(f"Symbol: {args.symbol}, Timeframe: {args.timeframe}")
+    logger.info(f"Symbols: {', '.join(args.symbols)}, Timeframe: {args.timeframe}")
     logger.info(f"Leverage: {args.leverage}x, Real Trading: {args.is_real}")
 
     try:
@@ -171,46 +176,51 @@ def main():
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    # Available symbols
-    symbols = ["ethusdt", "bnbusdt", "btcusdt", "adausdt", "axsusdt", "dotusdt"]
-
-    # Start trader
-    symbol = args.symbol if args.symbol else symbols[0]
+    # Start traders — one per symbol
+    traders = []
 
     try:
-        trader = manager.start_trader(
-            strategy=strategy,
-            symbol=symbol,
-            leverage=args.leverage,
-            is_real=args.is_real,
-            qty=args.qty,
-            w1=args.window_1,
-            m1=args.multiplier_1
-        )
+        for symbol in args.symbols:
+            trader = manager.start_trader(
+                strategy=strategy,
+                symbol=symbol,
+                leverage=args.leverage,
+                is_real=args.is_real,
+                qty=args.qty,
+                w1=args.window_1,
+                m1=args.multiplier_1
+            )
 
-        if trader is None:
-            logger.error("Failed to start trader")
+            if trader is None:
+                logger.error(f"Failed to start trader for {symbol}")
+                continue
+
+            traders.append(trader)
+            logger.info(f"Trader started: {trader.name}")
+
+        if not traders:
+            logger.error("No traders started successfully")
+            manager.stop(timeout=10)
             sys.exit(1)
-
-        logger.info(f"Trader started: {trader.name}")
 
         # Start live plotter if requested
         if args.plot:
             plotter = manager.start_live_plotter(
-                trader,
+                traders,
                 update_interval_ms=args.plot_interval,
                 port=args.plot_port
             )
             if plotter:
-                logger.info(f"Live plotter started at http://127.0.0.1:{args.plot_port}")
+                logger.info(f"Live dashboard started at http://127.0.0.1:{args.plot_port}")
             else:
                 logger.warning("Could not start live plotter (plotly/dash not installed)")
 
         logger.info("Press Ctrl+C to stop...")
 
-        # Keep main thread alive
-        while trader.is_alive():
-            trader.join(timeout=1)
+        # Keep main thread alive — wait for all traders
+        while any(t.is_alive() for t in traders):
+            for t in traders:
+                t.join(timeout=1)
 
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
